@@ -438,7 +438,7 @@ export const moveArrowDown = (ctx: ActionContext): ActionResult => {
     
     if(ctx.selection) {
         if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.withCursor(ctx.offset);
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
         } else {
             ctx.selection.reset(ctx.offset)
         }
@@ -462,7 +462,7 @@ export const moveArrowUp = (ctx: ActionContext): ActionResult => {
     
     if(ctx.selection) {
         if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.withCursor(ctx.offset);
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
         } else {
             ctx.selection.reset(ctx.offset)
         }
@@ -486,7 +486,7 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
     
     if(ctx.selection) {
         if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.withCursor(ctx.offset);
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
         } else {
             ctx.selection.reset(ctx.offset)
         }
@@ -511,7 +511,7 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
     
     if(ctx.selection) {
         if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.withCursor(ctx.offset);
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
         } else {
             ctx.selection.reset(ctx.offset)
         }

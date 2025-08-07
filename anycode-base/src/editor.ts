@@ -11,7 +11,7 @@ import {
     Action, ActionContext, ActionResult, executeAction
 } from './actions';
 import {
-    getMouseRow, getMouseCol, getPosFromMouse
+    getPosFromMouse
 } from './mouse';
 
 import { 
@@ -44,12 +44,19 @@ export class AnycodeEditor {
     private selection: Selection | null = null;
     private autoScrollTimer: number | null = null;
     private ignoreNextSelectionSet: boolean = false;
+    private isWordSelection: boolean = false;
+    private wordSelectionAnchor: number = 0;
     
     private isRenderPending = false;
     private lastScrollTop = 0;
 
     private runLines: number[] = [];
     private errorLines: Map<number, string> = new Map();
+    
+    private completionContainer: HTMLDivElement | null = null;
+    private selectedCompletionIndex = 0;
+    private activeSuggestions: string[] = [];
+
 
     constructor(initialText = '', options: any = {}) {
         this.offset = 0;
@@ -135,6 +142,17 @@ export class AnycodeEditor {
         document.addEventListener('selectionchange', this.handleSelectionChange);
     }
     
+    private removeEventListeners() {
+        this.container.removeEventListener("scroll", this.handleScroll);
+        this.codeContent.removeEventListener('click', this.handleClick);
+        this.codeContent.removeEventListener('keydown', this.handleKeydown);
+        this.container.removeEventListener('beforeinput', this.handleBeforeInput);
+        this.codeContent.removeEventListener('mousedown', this.handleMouseDown);
+        this.codeContent.removeEventListener('mouseup', this.handleMouseUp);
+        this.codeContent.removeEventListener('mousemove', this.handleMouseMove);
+        document.removeEventListener('selectionchange', this.handleSelectionChange);
+    }
+
     private handleScroll() {
         const scrollTop = this.container.scrollTop;
         if (!this.isRenderPending) {
@@ -402,6 +420,7 @@ export class AnycodeEditor {
     private handleMouseUp(e: MouseEvent) {
         // console.log('handleMouseUp ', this.selection);
         this.isMouseSelecting = false;
+        this.isWordSelection = false;
         
         if (this.autoScrollTimer) {
             cancelAnimationFrame(this.autoScrollTimer);
@@ -420,6 +439,8 @@ export class AnycodeEditor {
     
         if (e.detail === 2) { // double click
             this.selectWord(pos.row, pos.col);
+            this.isWordSelection = true;
+            this.wordSelectionAnchor = this.code.getOffset(pos.row, pos.col);
             return;
         }
         
@@ -428,8 +449,9 @@ export class AnycodeEditor {
             return;
         }
     
+        this.isWordSelection = false;
         const o = this.code.getOffset(pos.row, pos.col);
-
+    
         if (e.shiftKey && this.selection) {
             this.selection.updateCursor(o);
             this.ignoreNextSelectionSet = true;
@@ -450,18 +472,66 @@ export class AnycodeEditor {
         this.autoScroll(e);
         
         let pos = getPosFromMouse(e);
-        // console.log('handleMouseMove pos ', pos);
         
-        if (pos && this.selection){
-            let o = this.code.getOffset(pos.row, pos.col);
-            this.selection.updateCursor(o);
-            this.offset = o;
-            // console.log('handleMouseMove ', this.selection);
+        if (pos && this.selection) {
+            const { row, col } = pos;
+            const currentOffset = this.code.getOffset(row, col);
+        
+            if (this.isWordSelection) {
+                const line = this.code.line(row);
+                const currentPos = this.code.getPosition(currentOffset);
+        
+                const anchor = this.wordSelectionAnchor;
+                const anchorPos = this.code.getPosition(anchor);
+                const anchorLine = this.code.line(anchorPos.line);
+        
+                const direction = currentOffset < anchor ? 'backward' : 'forward';
+        
+                if (direction === 'backward') {
+                    // Selection is moving left (backward) — find start of current word
+                    const wordStartCol = findPrevWord(line, currentPos.column);
+                    const newCursor = this.code.getOffset(row, wordStartCol);
+        
+                    // Extend selection to the end of the anchor word
+                    const anchorEndCol = findNextWord(anchorLine, anchorPos.column);
+                    const anchorEnd = this.code.getOffset(anchorPos.line, anchorEndCol);
+        
+                    // Update selection from new word start to anchor word end
+                    this.selection = new Selection(newCursor, anchorEnd);
+                    this.offset = newCursor;
+                } else if (direction === 'forward') {
+                    // Selection is moving right (forward) — find end of current word
+                    const wordEndCol = findNextWord(line, currentPos.column);
+                    const newCursor = this.code.getOffset(row, wordEndCol);
+        
+                    // Extend selection from the start of the anchor word
+                    const anchorStartCol = findPrevWord(anchorLine, anchorPos.column);
+                    const anchorStart = this.code.getOffset(anchorPos.line, anchorStartCol);
+        
+                    // Update selection from anchor word start to new word end
+                    this.selection = new Selection(anchorStart, newCursor);
+                    this.offset = newCursor;
+                } else {
+                    // Cursor hasn't moved — select the current word under cursor
+                    const startCol = findPrevWord(line, currentPos.column);
+                    const endCol = findNextWord(line, currentPos.column);
+                    const start = this.code.getOffset(row, startCol);
+                    const end = this.code.getOffset(row, endCol);
+        
+                    this.selection = new Selection(start, end);
+                    this.offset = end;
+                }
+            } else {
+                // Standard selection mode — update the cursor directly
+                this.selection.updateCursor(currentOffset);
+                this.offset = currentOffset;
+            }
+        
             this.ignoreNextSelectionSet = true;
-            renderSelection(this.selection, this.getLines(), this.code)
+            renderSelection(this.selection, this.getLines(), this.code);
         }
     }
-    
+
     private autoScroll(e: MouseEvent) {
         const containerRect = this.container.getBoundingClientRect();
         const mouseY = e.clientY;
@@ -522,7 +592,7 @@ export class AnycodeEditor {
         this.ignoreNextSelectionSet = true;
         renderSelection(this.selection, this.getLines(), this.code)
     }
-
+    
     private selectLine(row: number) {
         const line = this.code.line(row);
         const start = this.code.getOffset(row, 0);
@@ -551,7 +621,17 @@ export class AnycodeEditor {
     
     private async handleKeydown(event: KeyboardEvent) {
         // console.log('keydown', event);
-                
+        if (event.ctrlKey && event.key === " ") {
+            event.preventDefault();
+            this.toggleCompletion();
+            return;
+        }
+    
+        if (this.handleCompletionKey(event)) {
+            event.preventDefault();
+            return;
+        }
+        
         const action = this.getActionFromKey(event);
         if (!action) return;
         
@@ -673,4 +753,112 @@ export class AnycodeEditor {
             this.applyEditResult(result);
         }
     }
+    
+    private async toggleCompletion() {
+        const suggestions = await this.fetchCompletions();
+    
+        if (this.completionContainer) {
+            this.closeCompletionBox();
+            return;
+        }
+        
+        this.completionContainer = document.createElement('div');
+        this.completionContainer.className = 'completion-box';
+            
+        this.activeSuggestions = suggestions;
+        this.selectedCompletionIndex = 0;
+        
+        for (let i = 0; i < suggestions.length; i++) {
+            const item = suggestions[i];
+            const div = document.createElement('div');
+            div.className = 'completion-item';
+            div.textContent = item;
+            div.dataset.index = i.toString();
+            div.onmouseenter = () => this.highlightCompletion(i);
+            div.onclick = () => this.selectCompletion(i);
+            this.completionContainer!.appendChild(div);
+        }
+        this.highlightCompletion(0);
+    
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        
+        // move completion under cursor position
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        const containerRect = this.container.getBoundingClientRect();
+        const top = rect.bottom - containerRect.top + this.container.scrollTop;
+        const left = rect.left - containerRect.left + this.container.scrollLeft;
+        
+        this.completionContainer!.style.position = 'absolute';
+        this.completionContainer!.style.top = `${top}px`;
+        this.completionContainer!.style.left = `${left}px`;
+    
+        this.container.appendChild(this.completionContainer!);
+    }
+    
+    private highlightCompletion(index: number) {
+        if (!this.completionContainer) return;
+        const children = this.completionContainer.children;
+        for (let i = 0; i < children.length; i++) {
+            const el = children[i] as HTMLElement;
+            el.style.background = i === index ? '#333' : 'transparent';
+            if (i === index) el.scrollIntoView({ block: 'nearest' });
+        }
+        this.selectedCompletionIndex = index;
+    }
+
+    
+    private selectCompletion(index: number) {
+        const value = this.activeSuggestions[index];
+        // todo insert completion logic here
+        this.closeCompletionBox();
+    }
+    
+    private closeCompletionBox() {
+        this.completionContainer?.remove();
+        this.completionContainer = null;
+        this.activeSuggestions = [];
+    }
+    
+    private handleCompletionKey(event: KeyboardEvent): boolean {
+        if (!this.completionContainer) return false;
+    
+        if (event.key === "ArrowDown") {
+            const next = (this.selectedCompletionIndex + 1) 
+                % this.activeSuggestions.length;
+            this.highlightCompletion(next);
+            return true;
+        }
+    
+        if (event.key === "ArrowUp") {
+            const prev = (this.selectedCompletionIndex - 1 + this.activeSuggestions.length) 
+                % this.activeSuggestions.length;
+            this.highlightCompletion(prev);
+            return true;
+        }
+    
+        if (event.key === "Enter") {
+            this.selectCompletion(this.selectedCompletionIndex);
+            return true;
+        }
+    
+        if (event.key === "Escape") {
+            this.closeCompletionBox();
+            return true;
+        }
+    
+        return false;
+    }
+
+    
+    private async fetchCompletions(): Promise<string[]> {
+        return [
+            'console', 'const', 'continue', 'class', 
+            'catch', 'catch', 'catch', 'catch', 'catch', 'catch', 'catch',
+            'catch', 'catch', 'catch', 'catch', 'catch', 'catch', 'catch',
+        ];
+    }
+
 }

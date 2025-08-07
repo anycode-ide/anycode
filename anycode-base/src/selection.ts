@@ -14,24 +14,13 @@ export class Selection {
         this.anchor = pos;
         this.cursor = pos;
     }
+    
     public updateCursor(pos: number) {
         this.cursor = pos;
     }
-
-    static fromRange(start: number, end: number): Selection {
-        return new Selection(start, end);
-    }
-
-    static fromAnchorAndCursor(anchor: number, cursor: number): Selection {
-        return new Selection(anchor, cursor);
-    }
     
-    withCursor(cursor: number): Selection {
+    fromCursor(cursor: number): Selection {
         return new Selection(this.anchor!, cursor);
-    }
-
-    static empty(offset: number): Selection {
-        return new Selection(offset, offset);
     }
 
     public isEmpty(): boolean {
@@ -40,15 +29,6 @@ export class Selection {
     
     public nonEmpty(): boolean {
         return !this.isEmpty();
-    }
-
-    public isActive(): boolean {
-        return this.nonEmpty();
-    }
-
-    public contains(index: number): boolean {
-        const [start, end] = this.sorted();
-        return index >= start && index < end;
     }
 
     public sorted(): [number, number] {
@@ -63,31 +43,6 @@ export class Selection {
 
     public get end(): number {
         return Math.max(this.anchor!, this.cursor!);
-    }
-
-    public min(): number {
-        return this.start;
-    }
-    
-    public max(): number {
-        return this.end;
-    }
-
-    public length(): number {
-        return this.end - this.start;
-    }
-
-    public equals(other: Selection | null): boolean {
-        if (!other) return false;
-        return this.anchor === other.anchor && this.cursor === other.cursor;
-    }
-
-    public toString(): string {
-        return `Selection(anchor=${this.anchor}, cursor=${this.cursor})`;
-    }
-
-    public bigger(s: Selection): boolean {
-        return this.length() > s.length();
     }
 }
 
@@ -193,9 +148,7 @@ function resolveDOMPosition(
 
 export function setSelectionFromOffsets(
     selection: Selection, lines: AnycodeLine[], code: Code
-) {
-    // console.log('setSelectionFromOffsets', selection, lines, code);
-    
+) {    
     if (lines.length === 0) return;
 
     const firstLine = lines[0];
@@ -228,51 +181,4 @@ export function setSelectionFromOffsets(
 
     sel.removeAllRanges();
     sel.addRange(range);
-}
-
-function findNodeAndOffset(lineDiv: AnycodeLine, targetOffset: number) {
-    let currentOffset = targetOffset;
-    for (let chunkNode of lineDiv.children) {
-        const textLength = chunkNode.textContent!.length;
-        if (currentOffset <= textLength) {
-            return {
-                node: chunkNode.firstChild,
-                offset: currentOffset
-            };
-        }
-        currentOffset -= textLength;
-    }
-    return null;
-}
-
-export function selectionDirection(selection: globalThis.Selection) {
-    const anchorNode = selection.anchorNode!;
-    const anchorOffset = selection.anchorOffset;
-    const focusNode = selection.focusNode;
-    const focusOffset = selection.focusOffset;
-
-    // console.log("Anchor Node:", anchorNode, "Anchor Offset:", anchorOffset);
-    // console.log("Focus Node:", focusNode, "Focus Offset:", focusOffset);
-
-    let direction;
-
-    if (anchorNode === focusNode) {
-        // Same node: Compare offsets
-        direction = anchorOffset <= focusOffset ? "forward" : "backward";
-    }
-    else {
-        // Different nodes: Compare positions in the DOM
-        const position = anchorNode.compareDocumentPosition(focusNode!);
-        if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
-            direction = "forward";
-        }
-        else if (position & Node.DOCUMENT_POSITION_PRECEDING) {
-            direction = "backward";
-        }
-        else {
-            direction = "unknown";
-        }
-    }
-
-    return direction;
 }
