@@ -55,8 +55,7 @@ export class AnycodeEditor {
     
     private completionContainer: HTMLDivElement | null = null;
     private selectedCompletionIndex = 0;
-    private activeSuggestions: string[] = [];
-
+    private completions: string[] = [];
 
     constructor(initialText = '', options: any = {}) {
         this.offset = 0;
@@ -114,6 +113,10 @@ export class AnycodeEditor {
         for (const { line, message } of errors) {
             this.errorLines.set(line, message);
         }
+    }
+    
+    public setCompletions(completions: string[]) {
+        this.completions = completions;
     }
 
     private setupEventListeners() {        
@@ -755,21 +758,21 @@ export class AnycodeEditor {
     }
     
     private async toggleCompletion() {
-        const suggestions = await this.fetchCompletions();
-    
         if (this.completionContainer) {
             this.closeCompletionBox();
             return;
         }
         
+        if (!this.completions.length) return;
+        
         this.completionContainer = document.createElement('div');
         this.completionContainer.className = 'completion-box';
             
-        this.activeSuggestions = suggestions;
+        const completions = this.completions;
         this.selectedCompletionIndex = 0;
         
-        for (let i = 0; i < suggestions.length; i++) {
-            const item = suggestions[i];
+        for (let i = 0; i < completions.length; i++) {
+            const item = completions[i];
             const div = document.createElement('div');
             div.className = 'completion-item';
             div.textContent = item;
@@ -811,7 +814,7 @@ export class AnycodeEditor {
 
     
     private selectCompletion(index: number) {
-        const value = this.activeSuggestions[index];
+        const value = this.completions[index];
         // todo insert completion logic here
         this.closeCompletionBox();
     }
@@ -819,7 +822,6 @@ export class AnycodeEditor {
     private closeCompletionBox() {
         this.completionContainer?.remove();
         this.completionContainer = null;
-        this.activeSuggestions = [];
     }
     
     private handleCompletionKey(event: KeyboardEvent): boolean {
@@ -827,14 +829,14 @@ export class AnycodeEditor {
     
         if (event.key === "ArrowDown") {
             const next = (this.selectedCompletionIndex + 1) 
-                % this.activeSuggestions.length;
+                % this.completions.length;
             this.highlightCompletion(next);
             return true;
         }
     
         if (event.key === "ArrowUp") {
-            const prev = (this.selectedCompletionIndex - 1 + this.activeSuggestions.length) 
-                % this.activeSuggestions.length;
+            const prev = (this.selectedCompletionIndex - 1 + this.completions.length) 
+                % this.completions.length;
             this.highlightCompletion(prev);
             return true;
         }
@@ -851,14 +853,4 @@ export class AnycodeEditor {
     
         return false;
     }
-
-    
-    private async fetchCompletions(): Promise<string[]> {
-        return [
-            'console', 'const', 'continue', 'class', 
-            'catch', 'catch', 'catch', 'catch', 'catch', 'catch', 'catch',
-            'catch', 'catch', 'catch', 'catch', 'catch', 'catch', 'catch',
-        ];
-    }
-
 }
