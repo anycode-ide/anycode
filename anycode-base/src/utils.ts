@@ -56,7 +56,7 @@ export function findNextWord(line: string, from: number): number {
             return i;
         }
     }
-    return line.length - 1;
+    return line.length;
 }
 export function findPrevWord(line: string, from: number): number {
     // Find the previous word index before the specified index
