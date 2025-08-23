@@ -44,6 +44,16 @@ export class Selection {
     public get end(): number {
         return Math.max(this.anchor!, this.cursor!);
     }
+
+    public equals(other: Selection): boolean {
+        const [startA, endA] = this.sorted();
+        const [startB, endB] = other.sorted();
+        return startA === startB && endA === endB;
+    }
+
+    public clone(): Selection {
+        return new Selection(this.anchor!, this.cursor!);
+    }
 }
 
 export function getSelection(): { start: Pos, end: Pos } | null {
@@ -150,6 +160,14 @@ export function setSelectionFromOffsets(
     selection: Selection, lines: AnycodeLine[], code: Code
 ) {    
     if (lines.length === 0) return;
+    
+    // Ensure all lines are connected to the DOM before proceeding
+    for (const line of lines) {
+        if (!line.isConnected) {
+            console.warn('setSelectionFromOffsets: line is not connected to DOM');
+            return;
+        }
+    }
 
     const firstLine = lines[0];
     const lastLine = lines[lines.length - 1];
@@ -172,13 +190,20 @@ export function setSelectionFromOffsets(
     const endPos = resolveDOMPosition(clamped.end, lines, code);
     if (!startPos || !endPos) return;
 
-    const range = document.createRange();
+    // Ensure we're working with the correct document context
+    const doc = startPos.node.ownerDocument || document;
+    const range = doc.createRange();
     const sel = window.getSelection();
     if (!sel) return;
 
     range.setStart(startPos.node, startPos.offset);
     range.setEnd(endPos.node, endPos.offset);
 
-    sel.removeAllRanges();
-    sel.addRange(range);
+    // Ensure the range is valid and in the same document as the selection
+    try {
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } catch (error) {
+        console.warn('Failed to add range to selection:', error);
+    }
 }

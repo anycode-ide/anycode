@@ -10,6 +10,12 @@ export function moveCursor(
     column: number,
     focus: boolean = true
 ) {
+    // Ensure the lineDiv is connected to the DOM before proceeding
+    if (!lineDiv.isConnected) {
+        console.warn('moveCursor: lineDiv is not connected to DOM');
+        return;
+    }
+    
     var character: number = column;
     
     const chunks = Array.from(lineDiv.children).map(l => l as AnycodeLine);
@@ -42,7 +48,10 @@ export function moveCursor(
     }
 
     const ch = chunk.firstChild || chunk;
-    const range = document.createRange();
+    
+    // Ensure we're working with the correct document context
+    const doc = ch.ownerDocument || document;
+    const range = doc.createRange();
     range.setStart(ch, chunkCharacter);
     range.collapse(true);
     
@@ -72,8 +81,13 @@ export function moveCursor(
 
     const sel = window.getSelection();
     if (sel) {
-        sel.removeAllRanges();
-        sel.addRange(range);
+        // Ensure the range is valid and in the same document as the selection
+        try {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        } catch (error) {
+            console.warn('Failed to add range to selection:', error);
+        }
     }
 }
 
@@ -104,7 +118,9 @@ function scrollCursorIntoViewHorizontally(
         return;
     }
     
-    const range = document.createRange();
+    // Ensure we're working with the correct document context
+    const doc = cursorNode.ownerDocument || document;
+    const range = doc.createRange();
     range.setStart(cursorNode, cursorOffset);
     range.collapse(true);
 

@@ -1,5 +1,6 @@
 import type { Code } from "./code";
 import { Selection } from "./selection";
+import { getIndentation } from "./utils";
 
 export enum Action {
     // Navigation
@@ -44,50 +45,30 @@ export type ActionResult = {
 export const executeAction = async (
     action: Action, ctx: ActionContext
 ): Promise<ActionResult> => {
-
     switch (action) {
         // Navigation
-        case Action.ARROW_LEFT:
-            return moveArrowLeft(ctx, false);
-        case Action.ARROW_RIGHT:
-            return moveArrowRight(ctx, false);
-        case Action.ARROW_LEFT_ALT:
-            return moveArrowLeft(ctx, true);
-        case Action.ARROW_RIGHT_ALT:
-            return moveArrowRight(ctx, true);
-        case Action.ARROW_UP:
-            return moveArrowUp(ctx);
-        case Action.ARROW_DOWN:
-            return moveArrowDown(ctx);
+        case Action.ARROW_LEFT: return moveArrowLeft(ctx, false);
+        case Action.ARROW_RIGHT: return moveArrowRight(ctx, false);
+        case Action.ARROW_LEFT_ALT: return moveArrowLeft(ctx, true);
+        case Action.ARROW_RIGHT_ALT: return moveArrowRight(ctx, true);
+        case Action.ARROW_UP: return moveArrowUp(ctx);
+        case Action.ARROW_DOWN:  return moveArrowDown(ctx);
 
         // Editing
-        case Action.BACKSPACE:
-            return handleBackspace(ctx);
-        case Action.ENTER:
-            return handleEnter(ctx);
-        case Action.TAB:
-            return handleTab(ctx);
-        case Action.UNTAB:
-            return handleUnTab(ctx);
-        case Action.TEXT_INPUT:
-            return handleTextInput(ctx);
+        case Action.BACKSPACE: return handleBackspace(ctx);
+        case Action.ENTER: return handleEnter(ctx);
+        case Action.TAB: return handleTab(ctx);
+        case Action.UNTAB: return handleUnTab(ctx);
+        case Action.TEXT_INPUT: return handleTextInput(ctx);
 
         // Shortcuts
-        case Action.UNDO:
-            return handleUndo(ctx);
-        case Action.REDO:
-            return handleRedo(ctx);
-        case Action.SELECT_ALL:
-            return handleSelectAll(ctx);
-        case Action.COPY:
-            return await handleCopy(ctx);
-        case Action.PASTE:
-            return await handlePaste(ctx);
-        case Action.CUT:
-            return await handleCut(ctx);
-        case Action.COMMENT:
-            return handleToggleComment(ctx);
-
+        case Action.UNDO: return handleUndo(ctx);
+        case Action.REDO: return handleRedo(ctx);
+        case Action.SELECT_ALL: return handleSelectAll(ctx);
+        case Action.COPY: return await handleCopy(ctx);
+        case Action.PASTE: return await handlePaste(ctx);
+        case Action.CUT: return await handleCut(ctx);
+        case Action.COMMENT: return handleToggleComment(ctx);
         default:
             return { ctx, changed: false };
     }
@@ -495,7 +476,6 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
     return { ctx, changed: false };
 };
 
-
 export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult => {
     if (ctx.offset <= 0) return { ctx, changed: false };
 
@@ -519,12 +499,3 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
 
     return { ctx, changed: false };
 };
-
-
-/**
- * Helper function to get indentation from a line
- */
-function getIndentation(line: string): string {
-    const match = line.match(/^\s*/);
-    return match ? match[0] : '';
-}

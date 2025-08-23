@@ -14,6 +14,7 @@
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
     "anycode-react": "workspace:*",
+    "anycode-base": "workspace:*",
     "jetbrains-mono": "^1.0.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

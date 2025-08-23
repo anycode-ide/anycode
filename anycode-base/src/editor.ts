@@ -1,4 +1,4 @@
-import { Code, HighlighedNode } from "./code";
+import { Code, Edit, HighlighedNode } from "./code";
 import { 
     generateCssClasses, addCssToDocument, isCharacter,
     AnycodeLine as AnycodeLine, Pos,
@@ -59,7 +59,8 @@ export class AnycodeEditor {
 
     constructor(initialText = '', options: any = {}) {
         this.offset = 0;
-        this.code = new Code(initialText, "test", "javascript");
+        const language = options.language || "javascript";
+        this.code = new Code(initialText, "test", language);
         this.settings = { lineHeight: 20, buffer: 20 };
         
         const theme = options.theme || vesper;
@@ -91,8 +92,27 @@ export class AnycodeEditor {
       this.container.appendChild(this.codeContent);
     }
 
+    public clean() {
+        console.log('clean');
+        this.removeEventListeners();
+        this.offset = 0;
+        this.selection = null;
+        
+        if (this.container && this.container.parentElement) {
+            this.container.parentElement.removeChild(this.container);
+        }
+    }
+
+    public setOnEdit(onEdit: (e: Edit) => void ) {
+        this.code.setOnEdit(onEdit);
+    }
+    
     public setText(newText: string) {
         this.code.setContent(newText);
+    }
+
+    public getText(): string {
+        return this.code.getContent();
     }
 
     public async init() {
@@ -136,13 +156,16 @@ export class AnycodeEditor {
         this.codeContent.addEventListener('mousedown', this.handleMouseDown);
 
         this.handleMouseUp = this.handleMouseUp.bind(this);
-        this.codeContent.addEventListener('mouseup', this.handleMouseUp);
+        this.container.addEventListener('mouseup', this.handleMouseUp);
         
         this.handleMouseMove = this.handleMouseMove.bind(this);
-        this.codeContent.addEventListener('mousemove', this.handleMouseMove);
+        this.container.addEventListener('mousemove', this.handleMouseMove);
         
         this.handleSelectionChange = this.handleSelectionChange.bind(this);
         document.addEventListener('selectionchange', this.handleSelectionChange);
+
+        this.handleBlur = this.handleBlur.bind(this);
+        this.codeContent.addEventListener('blur', this.handleBlur);
     }
     
     private removeEventListeners() {
@@ -151,9 +174,10 @@ export class AnycodeEditor {
         this.codeContent.removeEventListener('keydown', this.handleKeydown);
         this.container.removeEventListener('beforeinput', this.handleBeforeInput);
         this.codeContent.removeEventListener('mousedown', this.handleMouseDown);
-        this.codeContent.removeEventListener('mouseup', this.handleMouseUp);
-        this.codeContent.removeEventListener('mousemove', this.handleMouseMove);
+        this.container.removeEventListener('mouseup', this.handleMouseUp);
+        this.container.removeEventListener('mousemove', this.handleMouseMove);
         document.removeEventListener('selectionchange', this.handleSelectionChange);
+        this.codeContent.removeEventListener('blur', this.handleBlur);
     }
 
     private handleScroll() {
@@ -168,6 +192,14 @@ export class AnycodeEditor {
             });
             this.isRenderPending = true;
         }
+    }
+
+    public hasScroll() {
+        return this.lastScrollTop !== 0;
+    }
+
+    public restoreScroll() {
+        this.container.scrollTop = this.lastScrollTop;
     }
 
     private createSpacer(height: number): HTMLDivElement {
@@ -188,6 +220,7 @@ export class AnycodeEditor {
 
     private createButtonsColumnLine(lineNumber: number): HTMLDivElement {
         const div = document.createElement('div');
+        div.className = "bt";
         div.style.height = `${this.settings.lineHeight}px`;
         div.setAttribute('data-line', lineNumber.toString());
     
@@ -275,6 +308,7 @@ export class AnycodeEditor {
     }
 
     public render() {
+        console.log('render');
         const totalLines = this.code.linesLength();
         const { startLine, endLine } = this.getVisibleRange();
         
@@ -312,12 +346,32 @@ export class AnycodeEditor {
         this.gutter.style.height = `${fullHeight}px`;
         this.buttonsColumn.style.height = `${fullHeight}px`;
         this.codeContent.style.height = `${fullHeight}px`;
-                
+        
+        this.renderCursorOrSelection();
+    }
+
+    public renderCursorOrSelection() {
+        // console.log('renderCursorOrSelection');
+
         if (!this.selection || this.selection.isEmpty()) {
             this.updateCursor(false);
         } else {
             this.ignoreNextSelectionSet = true;
-            renderSelection(this.selection, this.getLines(), this.code)
+
+            let lines = this.getLines();
+            let attached = true;
+            for (const line of lines) {
+                if (!line.isConnected) {
+                    attached = false;
+                    break;
+                }
+            }
+
+            if (attached) {
+                renderSelection(this.selection, lines, this.code)
+            } else {
+                requestAnimationFrame(() => renderSelection(this.selection!, lines, this.code));
+            }
         }
     }
     
@@ -342,8 +396,12 @@ export class AnycodeEditor {
         const { line, column } = this.code.getPosition(this.offset);
         const lineDiv = this.getLine(line);
     
-        if (lineDiv && lineDiv.isConnected) {
-            moveCursor(lineDiv, column, focus);
+        if (lineDiv) {
+            if (lineDiv.isConnected) {
+                moveCursor(lineDiv, column, focus);
+            } else {
+                requestAnimationFrame(() => moveCursor(lineDiv, column, focus));
+            }
         } else {
             removeCursor();
         }
@@ -382,16 +440,10 @@ export class AnycodeEditor {
             if (existingLine) {
                 const existingHash = existingLine.getAttribute('data-hash');
                 if (existingHash !== theHash) {
-                    // Replace line
-                    // console.log(`Line ${i} update`);
-                    // Try smarter approach to update row 
                     const newLineElement = this.createLineWrapper(i, nodes);
                     existingLine.replaceWith(newLineElement);
-                    
                 }
             } else {
-                // This should trigger a full re-render since we're missing lines
-                // console.log('Missing lines detected, triggering full render');
                 this.render();
                 console.timeEnd('updateChanges');
                 return;
@@ -422,6 +474,17 @@ export class AnycodeEditor {
     
     private handleMouseUp(e: MouseEvent) {
         // console.log('handleMouseUp ', this.selection);
+        this.isMouseSelecting = false;
+        this.isWordSelection = false;
+        
+        if (this.autoScrollTimer) {
+            cancelAnimationFrame(this.autoScrollTimer);
+            this.autoScrollTimer = null;
+        }
+    }
+
+    private handleBlur(e: FocusEvent) {
+        console.log('Editor lost focus');
         this.isMouseSelecting = false;
         this.isWordSelection = false;
         
@@ -475,6 +538,9 @@ export class AnycodeEditor {
         this.autoScroll(e);
         
         let pos = getPosFromMouse(e);
+        // console.log('handleMouseMove', pos);
+
+        let oldSelection = this.selection?.clone();
         
         if (pos && this.selection) {
             const { row, col } = pos;
@@ -529,9 +595,12 @@ export class AnycodeEditor {
                 this.selection.updateCursor(currentOffset);
                 this.offset = currentOffset;
             }
-        
-            this.ignoreNextSelectionSet = true;
-            renderSelection(this.selection, this.getLines(), this.code);
+            
+            if (oldSelection && !oldSelection.equals(this.selection)) {
+                // console.log('selection changed');
+                this.ignoreNextSelectionSet = true;
+                renderSelection(this.selection, this.getLines(), this.code);
+            }
         }
     }
 
@@ -609,17 +678,17 @@ export class AnycodeEditor {
     }
     
     private handleSelectionChange(e: Event) {
-        if (this.ignoreNextSelectionSet) {
-            this.ignoreNextSelectionSet = false;
-            return;
-        }
-        
-        const selection = getSelection();
-        if (selection) {
-            const start = this.code.getOffset(selection.start.row, selection.start.col);
-            const end = this.code.getOffset(selection.end.row, selection.end.col);
-            this.selection = new Selection(start, end);
-        }
+        // if (this.ignoreNextSelectionSet) {
+        //     this.ignoreNextSelectionSet = false;
+        //     return;
+        // }
+
+        // const selection = getSelection();
+        // if (selection) {
+        //     const start = this.code.getOffset(selection.start.row, selection.start.col);
+        //     const end = this.code.getOffset(selection.end.row, selection.end.col);
+        //     this.selection = new Selection(start, end);
+        // }
     }
     
     private async handleKeydown(event: KeyboardEvent) {

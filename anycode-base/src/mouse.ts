@@ -1,6 +1,6 @@
 import { AnycodeLine, Pos } from "./utils"; 
 
-export function getPosFromMouse(e: MouseEvent): Pos | null{
+export function getPosFromMouse(e: MouseEvent): Pos | null {
     
     const target = e.target as Node;
     if (!target) return null;
@@ -21,16 +21,29 @@ export function getPosFromMouse(e: MouseEvent): Pos | null{
 
     if (!pos || !pos.offsetNode) return null;
 
-    const abs = resolveAbsoluteOffset(pos.offsetNode, pos.offset);
-    return abs
+    return resolvePosition(pos.offsetNode, pos.offset)
 }
 
-export function resolveAbsoluteOffset(node: Node, nodeOffset: number): Pos | null {
+function resolvePosition(node: Node, nodeOffset: number): Pos | null {
+    // corner case, out of row, on buttons column
+    if (node instanceof HTMLElement && node.classList.contains("bt")) {
+        const lineStr = node.getAttribute("data-line");
+        if (!lineStr) return null;
+        let row = parseInt(lineStr) ; 
+        return { row, col: 0 }; 
+    }
+
+    // corner case, out of row, on line numbers column
+    if (node.parentNode && node.parentNode instanceof HTMLElement 
+        && node.parentNode.classList.contains("ln")) {
+        const lineStr = node.parentNode.getAttribute("data-line");
+        if (!lineStr) return null;
+        let row = parseInt(lineStr); 
+        return { row, col: 0 }; 
+    }
+    
     // corner case, whole row selected
-    if (
-        node instanceof HTMLElement &&
-        node.classList.contains("line")
-    ) {
+    if (node instanceof HTMLElement && node.classList.contains("line")) {
         const lineDiv = node as AnycodeLine;
         return { row: lineDiv.lineNumber, col: 0 }; 
     }

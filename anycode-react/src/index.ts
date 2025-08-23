@@ -1,3 +1,5 @@
 import AnycodeEditorReact from './Component';
+import { AnycodeEditor, Edit, Operation } from 'anycode-base';
 
-export { AnycodeEditorReact };
+export { AnycodeEditorReact, AnycodeEditor, Operation };
+export type { Edit };

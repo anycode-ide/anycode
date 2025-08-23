@@ -47,8 +47,6 @@
   line-height: 20px;
   outline: none;
 }
-.anyeditor .code .line {
-}
 
 .has-error::after {
   content: attr(data-error);

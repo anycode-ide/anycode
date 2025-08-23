@@ -2,7 +2,6 @@ export interface AnycodeLine extends HTMLDivElement {
     lineNumber: number;
     offset: number;
     hash: string;
-    scrollIntoViewIfNeeded?: (centerIfNeeded?: boolean) => void;
 }
 
 export type Pos = { row: number; col: number };
@@ -105,4 +104,12 @@ export function objectHash(obj: any) {
     }
     // console.timeEnd("objectHash")
     return hash;
+}
+
+/**
+ * Helper function to get indentation from a line
+ */
+export function getIndentation(line: string): string {
+    const match = line.match(/^\s*/);
+    return match ? match[0] : '';
 }

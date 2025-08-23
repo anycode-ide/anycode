@@ -1,0 +1,151 @@
+.app-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-info {
+    background-color: #1e1e1e;
+    color: #fff;
+    padding: 4px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid #444;
+}
+
+.tab-bar {
+    display: flex;
+    background-color: #2d2d2d;
+    border-bottom: 1px solid #444;
+    overflow-x: auto;
+    min-height: 40px;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: #2d2d2d;
+    color: #ccc;
+    cursor: pointer;
+    border-right: 1px solid #444;
+    min-width: 120px;
+    position: relative;
+}
+
+.tab.active {
+    background-color: #3c3c3c;
+    color: #fff;
+}
+
+.tab-dirty-indicator {
+    margin-right: 8px;
+    color: transparent;
+}
+
+.tab-dirty-indicator.dirty {
+    color: #ffa500;
+}
+
+.tab-filename {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tab-close-button {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 2px 6px;
+    margin-left: 8px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 1.5rem;
+    outline: none;
+}
+
+.tab-close-button:focus {
+    outline: none;
+    border: none;
+    box-shadow: none;
+}
+
+.tab:hover .tab-close-button {
+    opacity: 1;
+}
+
+.tab-rename-input {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: inherit;
+    width: 100%;
+    outline: none;
+}
+
+.new-file-button {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 8px 12px;
+    font-size: 18px;
+}
+
+.toolbar {
+    display: flex;
+    background-color: #3c3c3c;
+    padding: 8px 16px;
+    border-bottom: 1px solid #444;
+    gap: 8px;
+    align-items: center;
+}
+
+.save-button {
+    background: #555;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: not-allowed;
+    font-size: 12px;
+}
+
+.save-button.dirty {
+    background: #007acc;
+    cursor: pointer;
+}
+
+.language-indicator {
+    color: #888;
+    font-size: 12px;
+}
+
+.tooltip {
+    margin-left: auto;
+    color: #888;
+    font-size: 11px;
+}
+
+.editor-area {
+    flex: 1;
+    padding: 0.3rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.file-info {
+    background-color: #1e1e1e;
+    color: #fff;
+    padding: 8px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid #444;
+}
+
+.editor-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
