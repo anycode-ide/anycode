@@ -3,7 +3,7 @@
   height: 100%;
   overflow: auto;
   font-family: monospace;
-  background: #1e1e1e;
+  /* background: #1e1e1e; */
   color: #fff;
   white-space: pre;
   outline: none;
@@ -30,7 +30,7 @@
   position: sticky;
   left: 32px;
   user-select: none;
-  pointer-events: none;
+  pointer-events: auto;
   background: inherit;
   min-width: 48px;
   text-align: center;
@@ -38,11 +38,13 @@
 }
 .anyeditor .gutter .ln {
   background: inherit;
+  min-width: 48px;
+  max-width: 48px;
 }
 
 .anyeditor .code {
   flex: 1;
-  padding-left: 10px;
+  /* padding-left: 10px; */
   font-size: 14px;
   line-height: 20px;
   outline: none;

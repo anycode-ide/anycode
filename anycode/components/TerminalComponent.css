@@ -1,0 +1,52 @@
+.xterm-viewport {
+    background-color: transparent !important;
+}
+
+.terminal-container {
+  width: 100%;
+  height: 100%;
+  /* background-color: #191919; */
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-header {
+  background-color: #2d2d2d;
+  padding: 8px 16px;
+  border-bottom: 1px solid #404040;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.terminal-title {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.terminal-content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.terminal-disconnected {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.0);
+  color: white;
+  font-size: 1.2rem;
+  z-index: 10;  
+}

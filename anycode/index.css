@@ -97,7 +97,7 @@ button:focus-visible {
 * {
   font-family: 'JetBrains Mono', monospace;
   font-weight: bold;
-  line-height: normal;
+  /* line-height: normal; */
   font-size: 14px;
 }
 

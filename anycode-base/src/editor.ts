@@ -484,7 +484,7 @@ export class AnycodeEditor {
     }
 
     private handleBlur(e: FocusEvent) {
-        console.log('Editor lost focus');
+        // console.log('Editor lost focus');
         this.isMouseSelecting = false;
         this.isWordSelection = false;
         

@@ -13,8 +13,12 @@
   "license": "ISC",
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
-    "anycode-react": "workspace:*",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-serialize": "^0.13.0",
+    "allotment": "^1.20.4",
     "anycode-base": "workspace:*",
+    "anycode-react": "workspace:*",
     "jetbrains-mono": "^1.0.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

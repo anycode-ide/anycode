@@ -109,78 +109,21 @@ function MyEditor() {
 }
 ```
 
-### Advanced Usage
-
-#### State Management
-
-```typescript
-// Save editor state
-const editorState = {
-    content: editor.getContent(),
-    cursor: editor.getCursor(),
-    selection: editor.getSelection(),
-    scrollTop: editor.getScrollTop()
-};
-
-// Restore editor state
-editor.setContent(editorState.content);
-editor.setCursor(editorState.cursor);
-editor.setSelection(editorState.selection);
-editor.setScrollTop(editorState.scrollTop);
-```
-
-#### Custom Language Support
-
-```typescript
-// Register custom language
-import { registerLanguage } from 'anycode-base';
-
-registerLanguage('custom', {
-    parser: customParser,
-    highlightRules: customHighlightRules
-});
-
-// Use custom language
-const editor = new AnycodeEditor(content, { language: 'custom' });
-```
-
-## Project Structure
-
-```
-anycode/                    # Demo application
-├── App.tsx                # Main demo app with tabs
-├── package.json           # Demo dependencies
-└── public/                # Static assets
-
-anycode-base/              # Core editor library
-├── src/
-│   ├── editor.ts         # Main AnycodeEditor class
-│   ├── code.ts           # Edit operations and types
-│   ├── cursor.ts         # Cursor management
-│   ├── selection.ts      # Text selection
-│   ├── langs/            # Language definitions
-│   └── index.ts          # Public exports
-
-anycode-react/             # React wrapper
-├── src/
-│   ├── Component.tsx     # React component
-│   └── index.ts          # Public exports
-```
 
 ## Supported Languages
 
 The AnycodeEditor supports syntax highlighting for:
 
 - **JavaScript/TypeScript** - Full ES6+ support
-- **Python** - Python 3.x syntax
-- **C/C++** - C99 and C++17 standards
+- **Python** - Python
+- **C/C++** - C and C++ 
 - **Java** - Java 8+ features
 - **Go** - Go 1.x syntax
 - **Rust** - Modern Rust features
 - **CSS/HTML** - Web standards
 - **JSON/YAML** - Configuration formats
 - **Bash** - Shell scripting
-- **Lua** - Lua 5.x syntax
+- **Lua** - Lua syntax
 - **Kotlin** - Kotlin features
 - **Zig** - Zig language support
 - **C#** - .NET C# syntax
@@ -230,28 +173,6 @@ cd anycode-base && pnpm build
 cd anycode-react && pnpm build
 ```
 
-## API Reference
-
-### AnycodeEditor Class
-
-#### Constructor
-```typescript
-new AnycodeEditor(content: string, options: EditorOptions)
-```
-
-#### Methods
-- `init(): Promise<void>` - Initialize the editor
-- `getContent(): string` - Get current content
-- `setContent(content: string): void` - Set content
-- `getState(): EditorState` - Get editor state
-- `setState(state: EditorState): void` - Restore state
-- `setOnEdit(callback: EditCallback): void` - Set edit handler
-
-#### Events
-- `onEdit` - Fired when content changes
-- `onCursorChange` - Fired when cursor moves
-- `onSelectionChange` - Fired when selection changes
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues and pull requests.
@@ -259,22 +180,6 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ## License
 
 This project is licensed under the ISC License.
-
-## Roadmap
-
-### Short Term
-- [ ] Enhanced cursor restoration
-- [ ] Selection state persistence
-- [ ] Event-driven architecture
-- [ ] Performance optimizations
-
-### Long Term
-- [ ] Plugin system
-- [ ] Custom themes
-- [ ] Collaborative editing
-- [ ] Mobile support
-- [ ] Accessibility improvements
-
 ---
 
 **Note**: This is a demo application showcasing the AnycodeEditor library. For production use, consider the specific requirements of your project and the current stability of the library.

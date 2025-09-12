@@ -7,7 +7,6 @@ interface AnycodeEditorProps {
 }
 
 export default function AnycodeEditorReact({ id, editorState }: AnycodeEditorProps) {
-  console.log('AnycodeEditorReact render');
 
   const containerRef = useRef<HTMLDivElement>(null);
 

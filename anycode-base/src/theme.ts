@@ -13,7 +13,7 @@ export let vesper = {
     "keyword": "#a0a0a0",
     "number": "#b1fce5",
     "constant": '#f6c99f',
-    "comment": "#585858",
+    "comment": "#727171",
     "accent_color": "#b1fce5",
     "accent_color2": "#a0a0a0"
 };

@@ -1,0 +1,135 @@
+.tree-item {
+    position: relative;
+    margin: 0;
+    padding: 0;
+}
+
+.tree-item-content {
+    display: flex;
+    align-items: center;
+    /* padding: 3px 6px; */
+    cursor: pointer;
+    border-radius: 12px;
+    transition: all 0.15s ease;
+    min-height: 20px;
+    position: relative;
+}
+
+.tree-item-content:hover {
+    background-color: #4a4a4a;
+}
+
+.tree-item-content.selected {
+    background-color: #3c3c3c;
+    color: #fff;
+}
+
+
+
+
+
+.tree-toggle {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    color: #888;
+    font-size: 12px;
+    transition: transform 0.2s ease;
+    cursor: pointer;
+    user-select: none;
+}
+
+.tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-toggle.collapsed {
+    transform: rotate(0deg);
+}
+
+.tree-toggle.leaf {
+    color: transparent;
+    cursor: default;
+}
+
+.tree-indent {
+    width: 20px;
+    height: 100%;
+    position: relative;
+}
+
+
+
+
+
+.tree-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #e0e0e0;
+    user-select: none;
+}
+
+/* Цвета для папок и файлов */
+.tree-item-content .tree-name {
+    color: #e0e0e0;
+}
+
+.tree-item-content.directory .tree-name {
+    color: #888888; /* Серый цвет для папок */
+}
+
+.tree-item-content.file .tree-name {
+    color: #e0e0e0; /* Обычный цвет для файлов */
+}
+
+.tree-size {
+    color: #888;
+    font-size: 10px;
+    margin-left: 8px;
+    font-family: monospace;
+    min-width: 50px;
+    text-align: right;
+    background-color: #3a3a3a;
+    padding: 1px 4px;
+    border-radius: 2px;
+    border: 1px solid #555;
+    flex-shrink: 0;
+}
+
+.tree-children {
+    /* margin-left: 1px; */
+    position: relative;
+}
+
+/* .tree-children::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background-color: #555;
+} */
+
+.tree-children .tree-item:last-child .tree-indent::before {
+    bottom: 50%;
+}
+
+.tree-loading {
+    padding: 8px 16px;
+    color: #888;
+    font-size: 12px;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tree-loading span {
+    color: #ffa500;
+}
