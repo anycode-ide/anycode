@@ -1,13 +1,16 @@
-**anycode** is a web-based IDE that allows you to write, edit, and manage code directly from your browser. Anycode supports a wide range of programming languages and provides an intuitive interface with powerful features for a seamless development experience.
+# anycode
+
+**anycode** is a lightning-fast web-based IDE that allows you to write, edit, and manage code directly from your browser. Built for speed and performance, anycode supports a wide range of programming languages and provides an intuitive interface with powerful features for a seamless development experience.
 
 ![editor](anycode/imgs/screen.png)
 
 
 ## Features
-- **Custom editor component**: Very fast and higly optimized virtual rendering based on tree-sitter parser, providing best scrolling experience. 
+- **Ultra-fast custom editor**: Exceptionally fast and highly optimized virtual rendering engine based on tree-sitter parser, delivering superior performance for large codebases. 
 - **Multi-language support**: Work with various programming languages in a single environment.
 - **Advanced code experience**: Utilizes a custom code component based on **web-tree-sitter** for efficient parsing, syntax highlighting, and real-time code analysis.
 - **File system integration**: WebSocket-based backend for browsing and editing files from your local filesystem.
+- **Integrated terminal**: Full-featured terminal emulator with WebSocket-based communication, supporting real-time command execution and output.
 
 ## Architecture
 
