@@ -843,7 +843,7 @@ export class AnycodeEditor {
     }
     
     private async handleKeydown(event: KeyboardEvent) {
-        // console.log('keydown', event);
+        console.log('keydown', event);
         if (event.ctrlKey && event.key === " ") {
             event.preventDefault();
             this.toggleCompletion();
@@ -931,34 +931,35 @@ export class AnycodeEditor {
         const offsetChanged = result.ctx.offset !== this.offset;
         const selectionChanged = this.selection !== result.ctx.selection;
         
-        // case 1: only cursor changed (without text and selection)
-        if (offsetChanged && !textChanged && !selectionChanged) {
-            this.offset = result.ctx.offset;
-            this.updateCursor(true);
-            return;
+        // Update all state first
+        if (textChanged) {
+            this.code = result.ctx.code;
         }
         
-        // case 2: only selection changed (without text and cursor)
-        if (selectionChanged && !textChanged && !offsetChanged) {
+        if (offsetChanged) {
+            this.offset = result.ctx.offset;
+        }
+        
+        if (selectionChanged) {
             this.selection = result.ctx.selection || null;
+        }
+        
+        // Then render based on what changed
+        if (textChanged) {
+            // Text changed - full re-render
+            this.renderChanges();
+            this.renderCursorOrSelection();
+        } else if (selectionChanged) {
+            // Only selection changed - render selection
             if (this.selection) {
                 this.ignoreNextSelectionSet = true;
                 renderSelection(this.selection, this.getLines(), this.code);
             } else {
                 this.updateCursor(true);
             }
-            return;
-        }
-        
-        // case 3: text changed (possibly with cursor and/or selection)
-        if (textChanged) {
-            this.code = result.ctx.code;
-            this.offset = result.ctx.offset;
-            this.selection = result.ctx.selection || null;
-
-            this.renderChanges();
-            this.renderCursorOrSelection();
-            return;
+        } else if (offsetChanged) {
+            // Only cursor changed - update cursor
+            this.updateCursor(true);
         }
     }
     

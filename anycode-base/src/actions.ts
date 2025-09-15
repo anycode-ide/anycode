@@ -415,13 +415,19 @@ export const moveArrowDown = (ctx: ActionContext): ActionResult => {
 
     const nextLine = line + 1;
     const nextCol = Math.min(column, ctx.code.lineLength(nextLine));
+    const originalOffset = ctx.offset;
     ctx.offset = ctx.code.getOffset(nextLine, nextCol);
     
-    if(ctx.selection) {
-        if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+    if (ctx.event?.shiftKey) {
+        if (!ctx.selection) {
+            // Initialize selection with original offset as anchor
+            ctx.selection = new Selection(originalOffset, ctx.offset);
         } else {
-            ctx.selection.reset(ctx.offset)
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+        }
+    } else {
+        if (ctx.selection) {
+            ctx.selection.reset(ctx.offset);
         }
     }
 
@@ -439,13 +445,19 @@ export const moveArrowUp = (ctx: ActionContext): ActionResult => {
 
     const prevLine = line - 1;
     const prevCol = Math.min(column, ctx.code.lineLength(prevLine));
+    const originalOffset = ctx.offset;
     ctx.offset = ctx.code.getOffset(prevLine, prevCol);
     
-    if(ctx.selection) {
-        if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+    if (ctx.event?.shiftKey) {
+        if (!ctx.selection) {
+            // Initialize selection with original offset as anchor
+            ctx.selection = new Selection(originalOffset, ctx.offset);
         } else {
-            ctx.selection.reset(ctx.offset)
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+        }
+    } else {
+        if (ctx.selection) {
+            ctx.selection.reset(ctx.offset);
         }
     }
 
@@ -455,6 +467,7 @@ export const moveArrowUp = (ctx: ActionContext): ActionResult => {
 export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult => {
     if (ctx.offset >= ctx.code.length()) return { ctx, changed: false };
 
+    const originalOffset = ctx.offset;
     if (alt) {
         const { line, column } = ctx.code.getPosition(ctx.offset);
         const s = ctx.code.line(line).slice(column);
@@ -465,11 +478,16 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
         ctx.offset += 1;
     }
     
-    if(ctx.selection) {
-        if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+    if (ctx.event?.shiftKey) {
+        if (!ctx.selection) {
+            // Initialize selection with original offset as anchor
+            ctx.selection = new Selection(originalOffset, ctx.offset);
         } else {
-            ctx.selection.reset(ctx.offset)
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+        }
+    } else {
+        if (ctx.selection) {
+            ctx.selection.reset(ctx.offset);
         }
     }
 
@@ -479,6 +497,7 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
 export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult => {
     if (ctx.offset <= 0) return { ctx, changed: false };
 
+    const originalOffset = ctx.offset;
     if (alt) {
         const { line, column } = ctx.code.getPosition(ctx.offset);
         const s = ctx.code.line(line).slice(0, column);
@@ -489,11 +508,16 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
         ctx.offset -= 1;
     }
     
-    if(ctx.selection) {
-        if (ctx.event?.shiftKey) {
-            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+    if (ctx.event?.shiftKey) {
+        if (!ctx.selection) {
+            // Initialize selection with original offset as anchor
+            ctx.selection = new Selection(originalOffset, ctx.offset);
         } else {
-            ctx.selection.reset(ctx.offset)
+            ctx.selection = ctx.selection.fromCursor(ctx.offset);
+        }
+    } else {
+        if (ctx.selection) {
+            ctx.selection.reset(ctx.offset);
         }
     }
 

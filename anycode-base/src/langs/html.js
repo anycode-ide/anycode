@@ -12,6 +12,14 @@ const query = `
   "</"
   "/>"
 ] @punctuation.bracket
+
+(script_element
+  (raw_text) @injection.content.javascript)
+ (#set! injection.language "javascript")
+
+(style_element
+  (raw_text) @injection.content.css)
+ (#set! injection.language "css")
 `
 
 let indent = { width: 4, unit: " " };
