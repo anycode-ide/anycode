@@ -8,7 +8,8 @@ import {
 
 import { vesper } from './theme';
 import {
-    Action, ActionContext, ActionResult, executeAction
+    Action, ActionContext, ActionResult, executeAction,
+    removeSelection
 } from './actions';
 import {
     getPosFromMouse
@@ -185,7 +186,7 @@ export class AnycodeEditor {
         if (!this.isRenderPending) {
             requestAnimationFrame(() => {
                 if (scrollTop !== this.lastScrollTop) {
-                    this.render();
+                    this.renderScroll();
                     this.lastScrollTop = scrollTop;
                 }
                 this.isRenderPending = false;
@@ -347,6 +348,156 @@ export class AnycodeEditor {
         this.buttonsColumn.style.height = `${fullHeight}px`;
         this.codeContent.style.height = `${fullHeight}px`;
         
+        this.renderCursorOrSelection();
+    }
+
+    private removeChildrenRange(parent: HTMLElement, from: number, to: number) {
+        // ensure we don't touch spacers
+        const maxIndex = parent.children.length - 2; // last — bottom spacer
+        const start = Math.max(1, from);             // first — top spacer
+        const end = Math.min(to, maxIndex);
+        
+        if (start > end) return;
+        
+        const range = document.createRange();
+        range.setStartBefore(parent.children[start]);
+        range.setEndAfter(parent.children[end]);
+        range.deleteContents();
+    }
+
+    private ensureSpacers(container: HTMLElement) {
+        if (container.children.length < 2) {
+            const top = this.createSpacer(0);
+            const bottom = this.createSpacer(0);
+            container.appendChild(top);
+            container.appendChild(bottom);
+        }
+    }
+
+    public renderScroll() {     
+        console.log('renderScroll');
+        const totalLines = this.code.linesLength();
+        const lineHeight = this.settings.lineHeight;
+
+        let code = this.code;
+        
+        this.ensureSpacers(this.codeContent);
+        this.ensureSpacers(this.gutter);
+        this.ensureSpacers(this.buttonsColumn);
+    
+        const topSpacer = this.codeContent.firstChild as HTMLElement;
+        const bottomSpacer = this.codeContent.lastChild as HTMLElement;
+    
+        const gutterTopSpacer = this.gutter.firstChild as HTMLElement;
+        const gutterBottomSpacer = this.gutter.lastChild as HTMLElement;
+    
+        const btnTopSpacer = this.buttonsColumn.firstChild as HTMLElement;
+        const btnBottomSpacer = this.buttonsColumn.lastChild as HTMLElement;
+    
+        let currentStartLine = (this.codeContent.children[1] as AnycodeLine)?.lineNumber ?? -1;
+        let currentEndLine = (this.codeContent.children[this.codeContent.children.length - 2] as AnycodeLine)?.lineNumber ?? -1;
+        
+        const { startLine, endLine } = this.getVisibleRange();
+        
+        // delete above
+        const toDeleteAbove = Math.min(
+            startLine - currentStartLine,
+            this.codeContent.children.length - 2
+        );
+        
+        if (toDeleteAbove > 10) {
+            this.render();
+            return;
+        }
+        
+        let changed = false;
+        if (toDeleteAbove > 0) {
+            // console.log('remove lines at the start', currentStartLine, 'count:', toDeleteAbove);
+            
+            this.removeChildrenRange(this.codeContent, 1, toDeleteAbove);
+            this.removeChildrenRange(this.gutter, 1, toDeleteAbove);
+            this.removeChildrenRange(this.buttonsColumn, 1, toDeleteAbove);
+            
+            currentStartLine += toDeleteAbove;
+            changed = true;
+        }
+          
+        // delete below
+        const toDeleteBelow = Math.min(
+            currentEndLine - endLine + 1,
+            this.codeContent.children.length - 2
+        );
+
+        if (toDeleteBelow > 10) {
+            this.render();
+            return;
+        }
+          
+        if (toDeleteBelow > 0) {
+            // console.log('remove lines at the end', currentEndLine, 'count:', toDeleteBelow);
+          
+            const last = this.codeContent.children.length - 2; 
+            const from = last - toDeleteBelow + 1;
+            const to = last;
+          
+            this.removeChildrenRange(this.codeContent, from, to);
+            this.removeChildrenRange(this.gutter, from, to);
+            this.removeChildrenRange(this.buttonsColumn, from, to);
+          
+            currentEndLine -= toDeleteBelow;
+            changed = true;
+        }
+    
+        // add above
+        while (currentStartLine > startLine) {
+            currentStartLine--;
+            const nodes = code.getLineNodes(currentStartLine);
+            const lineEl = this.createLineWrapper(currentStartLine, nodes);
+            this.codeContent.insertBefore(lineEl, this.codeContent.children[1]);
+    
+            this.gutter.insertBefore(this.createLineNumber(currentStartLine), this.gutter.children[1]);
+            this.buttonsColumn.insertBefore(this.createButtonsColumnLine(currentStartLine), this.buttonsColumn.children[1]);
+            changed = true;
+        }
+    
+        // add below
+        while (currentEndLine < endLine - 1) {
+            currentEndLine++;
+            const nodes = code.getLineNodes(currentEndLine);
+            const lineEl = this.createLineWrapper(currentEndLine, nodes);
+            this.codeContent.insertBefore(lineEl, bottomSpacer);
+    
+            this.gutter.insertBefore(this.createLineNumber(currentEndLine), gutterBottomSpacer);
+            this.buttonsColumn.insertBefore(this.createButtonsColumnLine(currentEndLine), btnBottomSpacer);
+            changed = true;
+        }
+
+        if (!changed) {
+            // console.log('no changes');
+            return;
+        }
+    
+        const topHeight = startLine * lineHeight;
+        const bottomHeight = (totalLines - endLine) * lineHeight;
+    
+        topSpacer.style.height = `${topHeight}px`;
+        bottomSpacer.style.height = `${bottomHeight}px`;
+    
+        gutterTopSpacer.style.height = `${topHeight}px`;
+        gutterBottomSpacer.style.height = `${bottomHeight}px`;
+    
+        btnTopSpacer.style.height = `${topHeight}px`;
+        btnBottomSpacer.style.height = `${bottomHeight}px`;
+
+        const fullHeight = this.codeContent.scrollHeight;
+        const newFullHeight = totalLines * this.settings.lineHeight;
+
+        if (newFullHeight !== fullHeight) {
+            this.gutter.style.height = `${fullHeight}px`;
+            this.buttonsColumn.style.height = `${fullHeight}px`;
+            this.codeContent.style.height = `${fullHeight}px`;
+        }
+    
         this.renderCursorOrSelection();
     }
 
@@ -776,20 +927,38 @@ export class AnycodeEditor {
     }
     
     private applyEditResult(result: ActionResult) {
-        if (result.changed) {
-            this.code = result.ctx.code;
-            this.renderChanges();
-        }
-        if (result.ctx.offset !== this.offset) {
+        const textChanged = result.changed;
+        const offsetChanged = result.ctx.offset !== this.offset;
+        const selectionChanged = this.selection !== result.ctx.selection;
+        
+        // case 1: only cursor changed (without text and selection)
+        if (offsetChanged && !textChanged && !selectionChanged) {
             this.offset = result.ctx.offset;
             this.updateCursor(true);
+            return;
         }
-        if (this.selection !== result.ctx.selection) {
+        
+        // case 2: only selection changed (without text and cursor)
+        if (selectionChanged && !textChanged && !offsetChanged) {
             this.selection = result.ctx.selection || null;
             if (this.selection) {
                 this.ignoreNextSelectionSet = true;
-                renderSelection(this.selection, this.getLines(), this.code)
+                renderSelection(this.selection, this.getLines(), this.code);
+            } else {
+                this.updateCursor(true);
             }
+            return;
+        }
+        
+        // case 3: text changed (possibly with cursor and/or selection)
+        if (textChanged) {
+            this.code = result.ctx.code;
+            this.offset = result.ctx.offset;
+            this.selection = result.ctx.selection || null;
+
+            this.renderChanges();
+            this.renderCursorOrSelection();
+            return;
         }
     }
     

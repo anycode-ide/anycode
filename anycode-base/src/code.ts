@@ -96,6 +96,14 @@ export class Code {
 
     private onEdit: ((e: Edit) => void) | null = null
 
+    private injection_parsers: Map<string, Parser> = new Map()
+    private injection_queries: Map<string, Parser.Query> = new Map()
+    private injectionCache = new Map<string, {
+        startIndex: number;
+        endIndex: number;
+        name: string;
+    }[]>();
+
     constructor(content: string = '', filename: string = '', language: string = 'text') {
         const builder = new PieceTreeTextBufferBuilder();
         builder.acceptChunk(content);
@@ -133,10 +141,97 @@ export class Code {
         if (this.language) {
             let q = this.getQuery();
             if (q) this.query = lang.query(q);
+            if (this.query) await this.initInjections();
             let tq = this.getRunnablesQuery();
             if (tq) this.runnablesQuery = lang.query(tq);
             if (this.runnablesQuery || this.isExecutable()) this.updateRunnables();
         }
+    }
+
+    public async initInjections() {
+        if (!this.query) return;
+
+        for (const name of this.query.captureNames) {
+            if (name.startsWith("injection.content.")) {
+                const language = name.slice("injection.content.".length);
+
+                if (this.injection_parsers.has(language) 
+                    && this.injection_queries.has(language)) {
+                    continue;
+                }
+
+                let parser = new Parser();
+
+                let lang;
+                if (langsCache.has(language)) {
+                    lang = langsCache.get(language)!;
+                } else {
+                    lang = await Parser.Language.load(`tree-sitter-${language}.wasm`);
+                    langsCache.set(language, lang);
+                }
+
+                parser.setLanguage(lang);
+                this.injection_parsers.set(language, parser);
+
+                try {
+                    const l = this.getLang(language);
+                    let query = l?.query;
+                    if (query) {
+                        this.injection_queries.set(language, lang.query(query));
+                    } else {
+                        console.error(`No query available for ${language}`);
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+
+                console.log('injection language initialized', name);
+            }
+        }
+    }
+
+    private buildInjectionCaptures(captures: any[]) {
+        const injectionCaptures: Array<{
+            startIndex: number;
+            endIndex: number;
+            name: string;
+        }> = [];
+    
+        for (const capture of captures) {
+            if (!capture.name.startsWith("injection.content.")) continue;
+    
+            const injectionLanguage = capture.name.slice("injection.content.".length);
+            if (!this.injection_parsers.has(injectionLanguage) || 
+                !this.injection_queries.has(injectionLanguage)) continue;
+    
+            // ---- cache key ----
+            const key = `${injectionLanguage}:${capture.node.startIndex}-${capture.node.endIndex}`;
+            if (this.injectionCache.has(key)) {
+                injectionCaptures.push(...this.injectionCache.get(key)!);
+                continue;
+            }
+    
+            const injectionParser = this.injection_parsers.get(injectionLanguage)!;
+            const injectionQuery = this.injection_queries.get(injectionLanguage)!;
+            const injectionContent = this.getIntervalContent2(
+                capture.node.startIndex, 
+                capture.node.endIndex
+            );
+    
+            const injectionTree = injectionParser.parse(injectionContent);
+            const injectionTreeCaptures = injectionQuery.captures(injectionTree.rootNode);
+    
+            const results = injectionTreeCaptures.map(ic => ({
+                startIndex: capture.node.startIndex + ic.node.startIndex,
+                endIndex: capture.node.startIndex + ic.node.endIndex,
+                name: ic.name
+            }));
+    
+            // save to cache
+            this.injectionCache.set(key, results);
+            injectionCaptures.push(...results);
+        }
+        return injectionCaptures;
     }
 
     /**
@@ -590,68 +685,88 @@ export class Code {
     }
 
     getLineNodes(line: number): HighlighedNode[] {
-        // Check cache first
         if (this.linesCache.has(line)) {
             return this.linesCache.get(line)!;
         }
-
+    
         const lineText = this.line(line) || "\u200B";
-
-        if (!this.language || !this.tree || !this.query)
+    
+        if (!this.language || !this.tree || !this.query) {
             return [{ name: null, text: lineText }];
-
+        }
+    
         const captures = this.query.captures(
             this.tree.rootNode,
             { row: line, column: 0 },
             { row: line + 1, column: 0 }
         );
-
+    
+        const injectionCapturesArray = this.buildInjectionCaptures(captures);
+    
         const lineNodes: HighlighedNode[] = [];
         let lastCapture: HighlighedNode | null = null;
-
-        let bytesCounter = this.buffer.getOffsetAt(line + 1, 0 + 1);
-
-        for (let column = 0; column < lineText.length;) {
-            let c = lineText[column];
-
-            const capture = captures.find(capture =>
-                capture.node.startIndex <= bytesCounter && bytesCounter < capture.node.endIndex
-            );
-
-            if (capture) {
-                const captureStart = column;
-                const captureEnd = capture.node.endPosition.row !== line ?
-                    lineText.length :
-                    capture.node.endPosition.column;
-
-                const text = lineText.substring(captureStart, captureEnd);
-                lastCapture = { name: capture.name, text };
-                lineNodes.push(lastCapture);
-
-                const textLength = text.length;
-                column += textLength;
-                bytesCounter += textLength;
+    
+        let bytesCounter = this.buffer.getOffsetAt(line + 1, 1);
+    
+        const appendNode = (name: string | null, text: string) => {
+            if (lastCapture && lastCapture.name === name) {
+                lastCapture.text += text;
             } else {
-                let text = c;
+                lastCapture = { name, text };
+                lineNodes.push(lastCapture);
+            }
+        };
 
-                if (lastCapture && lastCapture.name === null) {
-                    lastCapture.text += text; // Append current character to the last text
+        let column = 0;
+        const advance = (len: number) => {
+            column += len;
+            bytesCounter += len;
+        };
+        
+        for (; column < lineText.length;) {
+            const capture = captures.find(
+                c => c.node.startIndex <= bytesCounter && bytesCounter < c.node.endIndex
+            );    
+            if (capture?.name.startsWith("injection.content.")) {
+                // --- CASE 1: Injection ---
+                const injectionData = injectionCapturesArray.find(
+                    inj => bytesCounter >= inj.startIndex && bytesCounter < inj.endIndex
+                );
+    
+                if (injectionData) {
+                    const textLength = injectionData.endIndex - injectionData.startIndex;
+                    const text = lineText.substring(column, column + textLength);
+                    appendNode(injectionData.name, text);
+                    advance(textLength);
+                    continue;
                 } else {
-                    lastCapture = { name: null, text }; // Create a new capture for the text
-                    lineNodes.push(lastCapture);
+                    // --- CASE 3: Plain text ---
+                    appendNode(null, lineText[column]);
+                    advance(1);
+                    continue;
                 }
-                column += text.length;
-                bytesCounter += text.length;
+            }
+            if (capture) {
+                // --- CASE 2: Normal capture ---
+                const captureEnd = capture.node.endPosition.row !== line
+                    ? lineText.length
+                    : capture.node.endPosition.column;
+    
+                const text = lineText.substring(column, captureEnd);
+                appendNode(capture.name, text);
+                advance(text.length);
+            } else {
+                // --- CASE 3: Plain text ---
+                appendNode(null, lineText[column]);
+                advance(1);
             }
         }
-
+    
         if (lineNodes.length === 0) {
             lineNodes.push({ name: null, text: lineText || "\u200B" });
         }
-
-        // Cache the result before returning
-        if (this.linesCache) this.linesCache.set(line, lineNodes);
-
+    
+        this.linesCache.set(line, lineNodes);
         return lineNodes;
     }
 
