@@ -112,7 +112,6 @@ export class Code {
         this.language = language;
         this.filename = filename;
         this.input = this.input.bind(this);
-        this.getNodes = this.getNodes.bind(this);
     }
 
     public async init() {
@@ -607,81 +606,6 @@ export class Code {
         if (!this.language) return false;
         const language = this.getLang(this.language!);
         return language?.executable || false;
-    }
-
-    public getNodes(startLine: number, endLine: number): HighlighedNode[][] {
-        if (!endLine || endLine === -1) { endLine = this.linesLength() - 1; }
-
-        // Handle case when no language, no parser, or no query is available
-        if (!this.language || !this.tree || !this.query) {
-            return new Array(endLine - startLine).fill(null).map((_, i) => {
-                const lineText = this.buffer.getLineContent(startLine + i + 1) || "";
-                return [{ name: null, text: lineText || "\u200B" }];
-            });
-        }
-
-        let endColumn = this.lineLength(endLine);
-
-        const startPoint = { row: startLine, column: 0 };
-        const endPoint = { row: endLine + 1, column: endColumn };
-        const captures = this.query.captures(this.tree.rootNode, startPoint, endPoint);
-
-        const resultNodes: HighlighedNode[][] = [];
-
-        for (let line = startLine; line < endLine; line++) {
-            let bytesCounter = this.buffer.getOffsetAt(line + 1, 0 + 1);
-
-            const lineText = this.buffer.getLineContent(line + 1) || "";
-            const lineNodes: HighlighedNode[] = [];
-            let lastCapture: HighlighedNode | null = null;
-
-            let lineCaptures = captures.filter(capture =>
-                capture.node.startPosition.row <= line && line <= capture.node.endPosition.row
-            )
-
-            for (let column = 0; column < lineText.length;) {
-                let c = lineText[column];
-
-                const capture = lineCaptures.find(capture =>
-                    capture.node.startIndex <= bytesCounter && bytesCounter < capture.node.endIndex
-                );
-
-                if (capture) {
-                    const captureStart = column;
-                    const captureEnd = capture.node.endPosition.row !== line ?
-                        lineText.length :
-                        capture.node.endPosition.column
-
-                    const text = lineText.substring(captureStart, captureEnd);
-                    lastCapture = { name: capture.name, text };
-                    lineNodes.push(lastCapture);
-
-                    const textLength = text.length;
-                    column += textLength;
-                    bytesCounter += textLength;
-                } else {
-                    let text = c;
-
-                    if (lastCapture && lastCapture.name === null) {
-                        lastCapture.text += text;  // Append current character to the last text
-                    } else {
-                        lastCapture = { name: null, text }; // Create a new capture for the text
-                        lineNodes.push(lastCapture);
-                    }
-                    column += text.length;
-                    bytesCounter += text.length;
-                }
-            }
-
-            if (lineNodes.length === 0) {
-                lineNodes.push({ name: null, text: lineText || "\u200B" });
-            }
-
-            resultNodes.push(lineNodes);
-            // bytesCounter += 1; // for '\n'
-        }
-
-        return resultNodes;
     }
 
     getLineNodes(line: number): HighlighedNode[] {

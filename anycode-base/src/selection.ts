@@ -187,7 +187,7 @@ export function setSelectionFromOffsets(
         const [newStart, newEnd] = selection.sorted();
 
         if (currentStartOffset === newStart && currentEndOffset === newEnd) {
-            console.log('Selection is already set, skipping');
+            // console.log('Selection is already set, skipping');
             return;
         }
     }

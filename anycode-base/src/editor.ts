@@ -309,7 +309,7 @@ export class AnycodeEditor {
     }
 
     public render() {
-        console.log('render');
+        // console.log('render');
         const totalLines = this.code.linesLength();
         const { startLine, endLine } = this.getVisibleRange();
         
@@ -375,7 +375,7 @@ export class AnycodeEditor {
     }
 
     public renderScroll() {     
-        console.log('renderScroll');
+        // console.log('renderScroll');
         const totalLines = this.code.linesLength();
         const lineHeight = this.settings.lineHeight;
 
@@ -452,11 +452,18 @@ export class AnycodeEditor {
         while (currentStartLine > startLine) {
             currentStartLine--;
             const nodes = code.getLineNodes(currentStartLine);
-            const lineEl = this.createLineWrapper(currentStartLine, nodes);
-            this.codeContent.insertBefore(lineEl, this.codeContent.children[1]);
-    
-            this.gutter.insertBefore(this.createLineNumber(currentStartLine), this.gutter.children[1]);
-            this.buttonsColumn.insertBefore(this.createButtonsColumnLine(currentStartLine), this.buttonsColumn.children[1]);
+            this.codeContent.insertBefore(
+                this.createLineWrapper(currentStartLine, nodes), 
+                this.codeContent.children[1]
+            );
+            this.gutter.insertBefore(
+                this.createLineNumber(currentStartLine), 
+                this.gutter.children[1]
+            );
+            this.buttonsColumn.insertBefore(
+                this.createButtonsColumnLine(currentStartLine),
+                this.buttonsColumn.children[1]
+            );
             changed = true;
         }
     
@@ -464,11 +471,18 @@ export class AnycodeEditor {
         while (currentEndLine < endLine - 1) {
             currentEndLine++;
             const nodes = code.getLineNodes(currentEndLine);
-            const lineEl = this.createLineWrapper(currentEndLine, nodes);
-            this.codeContent.insertBefore(lineEl, bottomSpacer);
-    
-            this.gutter.insertBefore(this.createLineNumber(currentEndLine), gutterBottomSpacer);
-            this.buttonsColumn.insertBefore(this.createButtonsColumnLine(currentEndLine), btnBottomSpacer);
+            this.codeContent.insertBefore(
+                this.createLineWrapper(currentEndLine, nodes), 
+                bottomSpacer
+            );
+            this.gutter.insertBefore(
+                this.createLineNumber(currentEndLine), 
+                gutterBottomSpacer
+            );
+            this.buttonsColumn.insertBefore(
+                this.createButtonsColumnLine(currentEndLine), 
+                btnBottomSpacer
+            );
             changed = true;
         }
 
