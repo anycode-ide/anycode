@@ -13,23 +13,24 @@
   "license": "ISC",
   "packageManager": "pnpm@10.13.1",
   "dependencies": {
-    "@xterm/xterm": "^5.5.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-serialize": "^0.13.0",
+    "@xterm/xterm": "^5.5.0",
     "allotment": "^1.20.4",
     "anycode-base": "workspace:*",
     "anycode-react": "workspace:*",
     "jetbrains-mono": "^1.0.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "socket.io-client": "^4.8.1",
     "tree-sitter": "^0.25.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
-    "tree-sitter-cli": "^0.25.8",
-    "tree-sitter-javascript": "^0.23.1",
     "cpy-cli": "^5.0.0",
     "rimraf": "^6.0.1",
+    "tree-sitter-cli": "^0.25.8",
+    "tree-sitter-javascript": "^0.23.1",
     "vite": "^7.0.5"
   }
 }

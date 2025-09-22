@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { AnycodeEditorReact, AnycodeEditor, Edit, Operation } from 'anycode-react';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
@@ -35,7 +36,7 @@ const App: React.FC = () => {
     const terminalMessageHandlerRef = useRef<((data: string) => void) | null>(null);
     
     // WebSocket connection
-    const wsRef = useRef<WebSocket | null>(null);
+    const wsRef = useRef<Socket | null>(null);
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttemptsRef = useRef<number>(0);
     const reconnectDelay = 1000; // 1 second
@@ -133,10 +134,7 @@ const App: React.FC = () => {
         if (terminalVisible && isConnected && wsRef.current) {
             console.log('App: Initializing terminal on backend');
             // Initialize terminal when it becomes visible using new protocol
-            wsRef.current.send(JSON.stringify({ 
-                type: 'terminal', 
-                data: { operation: 'init', cols: terminalColsRef.current, rows: terminalRowsRef.current }
-            }));
+            wsRef.current.emit('terminal', { operation: 'init', cols: terminalColsRef.current, rows: terminalRowsRef.current });
         } else {
             console.log('App: Cannot initialize terminal:', {
                 terminalVisible,
@@ -317,12 +315,10 @@ const App: React.FC = () => {
                 reconnectTimeoutRef.current = null;
             }
 
-            // Convert HTTP URL to WebSocket URL
-            const wsUrl = BACKEND_URL.replace('http://', 'ws://').replace('https://', 'wss://');
-            const ws = new WebSocket(wsUrl);
+            const ws = io(BACKEND_URL, { transports: ['websocket'] });
             wsRef.current = ws;
 
-            ws.onopen = () => {
+            ws.on('connect', () => {
                 console.log('Connected to backend');
                 setIsConnected(true);
                 setConnectionError(null);
@@ -332,131 +328,101 @@ const App: React.FC = () => {
                 // Initialize terminal
                 if (terminalVisible) {
                     console.log('App: Initializing terminal after WebSocket connection');
-                    // Send initial terminal setup
-                    ws.send(JSON.stringify({ 
-                        type: 'terminal', 
-                        data: { operation: 'init' }
-                    }));
+                    ws.emit('terminal', { operation: 'init' });
                 } else {
                     console.log('App: Terminal not visible, skipping initialization');
                 }
-            };
+            });
 
-            ws.onclose = (event) => {
-                console.log('Disconnected from backend', event.code, event.reason);
+            ws.on('disconnect', (reason) => {
+                console.log('Disconnected from backend', reason);
                 setIsConnected(false);
-                
-                // Only attempt reconnect if it wasn't a manual disconnect
-                if (event.code !== 1000) { // 1000 = normal closure
-                    attemptReconnect();
-                }
-            };
+                attemptReconnect();
+            });
 
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
+            ws.on('connect_error', (error) => {
+                console.error('Socket connect error:', error);
                 setIsConnected(false);
                 setConnectionError('Failed to connect to backend');
-            };
+            });
 
-            ws.onmessage = (event) => {
-                try {
-                    const message = JSON.parse(event.data);
-                    const { type, data } = message;
-                    
-                    switch (type) {
-                        case 'directory':
-                            console.log('Received directory:', data);
-                            
-                            // if this is root directory, update the whole tree
-                            if (data.path === '.') {
-                                let children = convertToTree(data.files);
-                                const rootNode = {
-                                    id: '.',
-                                    name: data.name || 'Root',
-                                    type: 'directory' as const,
-                                    path: '.',
-                                    children: children,
-                                    isExpanded: true,
-                                    isSelected: false,
-                                    isLoading: false,
-                                    hasLoaded: true
-                                };
-                                setFileTree([rootNode]);
-                            } else {
-                                // otherwise add content to existing node
-                                setFileTree(prevTree => {
-                                    const updateNode = (nodes: TreeNode[]): TreeNode[] => {
-                                        return nodes.map(node => {
-                                            if (node.path === data.path) {
-                                                let children = convertToTree(data.files);
-                                                // activeFileId is null, fix???
-                                                node.children?.forEach(child => {
-                                                    child.isSelected = child.id === activeFileId;
-                                                })
-                                                return {
-                                                    ...node, children: children,
-                                                    isLoading: false, hasLoaded: true, isExpanded: true
-                                                };
-                                            }
-                                            if (node.children) {
-                                                return { ...node, children: updateNode(node.children) };
-                                            }
-                                            return node;
-                                        });
+            // message handlers
+            ws.on('directory', (data) => {
+                console.log('Received directory:', data);
+                if (data.path === '.') {
+                    let children = convertToTree(data.files);
+                    const rootNode = {
+                        id: '.',
+                        name: data.name || 'Root',
+                        type: 'directory' as const,
+                        path: '.',
+                        children: children,
+                        isExpanded: true,
+                        isSelected: false,
+                        isLoading: false,
+                        hasLoaded: true
+                    };
+                    setFileTree([rootNode]);
+                } else {
+                    setFileTree(prevTree => {
+                        const updateNode = (nodes: TreeNode[]): TreeNode[] => {
+                            return nodes.map(node => {
+                                if (node.path === data.path) {
+                                    let children = convertToTree(data.files);
+                                    node.children?.forEach(child => {
+                                        child.isSelected = child.id === activeFileId;
+                                    })
+                                    return {
+                                        ...node, children: children,
+                                        isLoading: false, hasLoaded: true, isExpanded: true
                                     };
-                                    return updateNode(prevTree);
-                                });
-                            }
-                            
-                            setCurrentPath(data.path);
-                            break;
-                            
-                        case 'filecontent':
-                            console.log('Received file content:', data);
-                            const { path, content } = data;
-                            
-                            const existingFile = files.find(file => file.id === path);                
-                            if (existingFile) {
-                                setActiveFileId(existingFile.id);
-                                return;
-                            }
-                            
-                            // Create a new file from the received content
-                            const fileName = path.split('/').pop() || 'untitled';
-                            const language = getLanguageFromFileName(fileName);
-                            
-                            const newFile: FileState = {
-                                id: path,  name: fileName, language, content: content
-                            };
-
-                            setFiles(prev => [...prev, newFile]);
-                            setActiveFileId(newFile.id);
-                            break;
-                            
-                        case 'filesaved':
-                            console.log('File saved:', data);
-                            if (data.success) {
-                                console.log(`File ${data.path} saved on server`);
-                            }
-                            break;
-                            
-                        case 'error':
-                            console.error('Backend error:', data);
-                            setConnectionError(data.message);
-                            break;
-                            
-                        case 'terminal':
-                            if (terminalMessageHandlerRef.current) {
-                                terminalMessageHandlerRef.current(data);
-                            }
-                            break;
-                        default:
-                            console.log('Unknown message type:', type);
-                    }
-                } catch (error) {
-                    console.error('Error parsing message:', error);
+                                }
+                                if (node.children) {
+                                    return { ...node, children: updateNode(node.children) };
+                                }
+                                return node;
+                            });
+                        };
+                        return updateNode(prevTree);
+                    });
                 }
-            };
+                setCurrentPath(data.path);
+            });
+
+            ws.on('filecontent', (data) => {
+                console.log('Received file content:', data);
+                const { path, content } = data;
+                const existingFile = files.find(file => file.id === path);                
+                if (existingFile) {
+                    setActiveFileId(existingFile.id);
+                    return;
+                }
+                const fileName = path.split('/').pop() || 'untitled';
+                const language = getLanguageFromFileName(fileName);
+                const newFile: FileState = {
+                    id: path,  name: fileName, language, content: content
+                };
+                setFiles(prev => [...prev, newFile]);
+                setActiveFileId(newFile.id);
+            });
+
+            ws.on('filesaved', (data) => {
+                console.log('File saved:', data);
+                if (data.success) {
+                    console.log(`File ${data.path} saved on server`);
+                }
+            });
+
+            ws.on('error', (data) => {
+                console.error('Backend error:', data);
+                setConnectionError(data.message);
+            });
+
+            ws.on('terminal', (data: string) => {
+                if (terminalMessageHandlerRef.current) {
+                    terminalMessageHandlerRef.current(data);
+                }
+            });
 
         } catch (error) {
             console.error('Failed to connect to backend:', error);
@@ -475,7 +441,7 @@ const App: React.FC = () => {
         reconnectAttemptsRef.current = 0;
         
         if (wsRef.current) {
-            wsRef.current.close(1000, 'Manual disconnect'); 
+            wsRef.current.disconnect();
             wsRef.current = null;
         }
         setIsConnected(false);
@@ -485,11 +451,7 @@ const App: React.FC = () => {
     const handleTerminalData = useCallback((name: string, data: string) => {
         // console.log('App: Terminal data received:', data);
         if (wsRef.current && isConnected) {
-            // console.log('App: Sending terminal data to backend');
-            wsRef.current.send(JSON.stringify({ 
-                type: 'terminal', 
-                data: { operation: 'data', content: data }
-            }));
+            wsRef.current.emit('terminal', { operation: 'data', content: data });
         }
     }, [isConnected]);
 
@@ -503,16 +465,13 @@ const App: React.FC = () => {
         terminalColsRef.current = cols;
         terminalRowsRef.current = rows;
         if (wsRef.current && isConnected) {
-            wsRef.current.send(JSON.stringify({
-                type: 'terminal',
-                data: { operation: 'resize', cols: cols, rows: rows }
-            }));
+            wsRef.current.emit('terminal', { operation: 'resize', cols: cols, rows: rows });
         }
     }, [isConnected]);
 
     const openFolder = (path: string) => {
         if (wsRef.current && isConnected) {
-            wsRef.current.send(JSON.stringify({ type: 'openfolder', data: { path } }));
+            wsRef.current.emit('openfolder', { path });
         }
     };
 
@@ -533,10 +492,7 @@ const App: React.FC = () => {
         console.log('File not open, requesting content from server');
         // if file is not open, request its content
         if (wsRef.current && isConnected) {
-            wsRef.current.send(JSON.stringify({
-                type: 'openfile',
-                data: { path }
-            }));
+            wsRef.current.emit('openfile', { path });
         }
     };
 
