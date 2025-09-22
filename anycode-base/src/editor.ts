@@ -522,8 +522,6 @@ export class AnycodeEditor {
     
         this.renderCursorOrSelection(false);
     }
-    
-        
 
     public renderCursorOrSelection(focus: boolean = false) {
         // console.log('renderCursorOrSelection');
