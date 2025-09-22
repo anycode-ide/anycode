@@ -40,6 +40,7 @@ export class AnycodeEditor {
     private buttonsColumn!: HTMLDivElement;
     private gutter!: HTMLDivElement;
     private codeContent!: HTMLDivElement;
+    private maxLineWidth = 0;
     
     private isMouseSelecting: boolean = false;
     private selection: Selection | null = null;
@@ -62,7 +63,7 @@ export class AnycodeEditor {
         this.offset = 0;
         const language = options.language || "javascript";
         this.code = new Code(initialText, "test", language);
-        this.settings = { lineHeight: 20, buffer: 10 };
+        this.settings = { lineHeight: 20, buffer: 30 };
         
         const theme = options.theme || vesper;
         const css = generateCssClasses(theme);
@@ -346,9 +347,16 @@ export class AnycodeEditor {
 
         const codeFragment = document.createDocumentFragment();
         codeFragment.appendChild(this.createSpacer(paddingTop));
+
+        let maxLineWidth = this.maxLineWidth || 0;
         for (let i = startLine; i < endLine; i++) {
             const nodes = this.code.getLineNodes(i);
             const lineWrapper = this.createLineWrapper(i, nodes);
+            this.container.appendChild(lineWrapper);
+            const width = lineWrapper.scrollWidth;
+            this.container.removeChild(lineWrapper);
+            if (width > maxLineWidth) maxLineWidth = width;
+            
             codeFragment.appendChild(lineWrapper);
         }
         codeFragment.appendChild(this.createSpacer(paddingBottom));
@@ -358,6 +366,9 @@ export class AnycodeEditor {
         this.gutter.style.height = `${fullHeight}px`;
         this.buttonsColumn.style.height = `${fullHeight}px`;
         this.codeContent.style.height = `${fullHeight}px`;
+        // apply max line width collected during this render
+        this.maxLineWidth = maxLineWidth;
+        this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
         
         this.renderCursorOrSelection();
     }
@@ -372,14 +383,27 @@ export class AnycodeEditor {
     }
 
     public renderScroll() {
-        console.log('renderScroll');
         const totalLines = this.code.linesLength();
         const lineHeight = this.settings.lineHeight;
     
+        // round scrollTop and viewportHeight for stability
+        const scrollTop = Math.floor(this.container.scrollTop);
+        const viewportHeight = Math.floor(this.container.clientHeight);
         const buffer = this.settings.buffer;
-        const { startLine, endLine } = this.getVisibleRange();
-
-        let code = this.code;
+    
+        // startLine inclusive
+        const startLine = Math.max(0, Math.floor(scrollTop / lineHeight) - buffer);
+    
+        // количество видимых строк в viewport
+        const visibleLinesInViewport = Math.floor(viewportHeight / lineHeight);
+    
+        // endLine exclusive
+        const endLine = Math.min(
+            totalLines,
+            startLine + visibleLinesInViewport + buffer * 2
+        );
+    
+        const code = this.code;
     
         this.ensureSpacers(this.codeContent);
         this.ensureSpacers(this.gutter);
@@ -396,93 +420,92 @@ export class AnycodeEditor {
     
         let currentStartLine = (this.codeContent.children[1] as AnycodeLine)?.lineNumber ?? -1;
         let currentEndLine =
-            (this.codeContent.children[this.codeContent.children.length - 2] as AnycodeLine)
-                ?.lineNumber ?? -1;
+            ((this.codeContent.children[this.codeContent.children.length - 2] as AnycodeLine)
+                ?.lineNumber ?? -1) + 1; // exclusive
     
         let changed = false;
     
-        // --- decide: do diff or full rerender ---
+        // --- full rerender if needed ---
         const needFullRerender =
-            currentStartLine === -1 || // empty
-            startLine > currentEndLine || endLine < currentStartLine || // no intersection
+            currentStartLine === -1 ||
+            startLine >= currentEndLine || endLine <= currentStartLine ||
             Math.abs(startLine - currentStartLine) > buffer * 2 ||
             Math.abs(endLine - currentEndLine) > buffer * 2;
     
         if (needFullRerender) {
             this.render();
             return;
-        } else {
-            // --- optimized scroll, only for «small scrolls» ---
-
-            // delete above
-            while (currentStartLine < startLine && this.codeContent.children.length > 2) {
-                this.codeContent.removeChild(this.codeContent.children[1]);
-                this.gutter.removeChild(this.gutter.children[1]);
-                this.buttonsColumn.removeChild(this.buttonsColumn.children[1]);
-                currentStartLine++;
-                changed = true;
-            }
-    
-            // delete below
-            while (currentEndLine >= endLine && this.codeContent.children.length > 2) {
-                let i = this.codeContent.children.length - 2;
-                this.codeContent.removeChild(this.codeContent.children[i]);
-                this.gutter.removeChild(this.gutter.children[i]);
-                this.buttonsColumn.removeChild(this.buttonsColumn.children[i]);
-                currentEndLine--;
-                changed = true;
-            }
-                
-            // add above (using fragment)
-            if (currentStartLine > startLine) {
-                const fragCode = document.createDocumentFragment();
-                const fragGutter = document.createDocumentFragment();
-                const fragButtons = document.createDocumentFragment();
-
-                while (currentStartLine > startLine) {
-                    currentStartLine--;
-                    const nodes = code.getLineNodes(currentStartLine);
-                    const lw = this.createLineWrapper(currentStartLine, nodes); 
-                    fragCode.insertBefore(lw, fragCode.firstChild);
-                    const ln = this.createLineNumber(currentStartLine);
-                    fragGutter.insertBefore(ln, fragGutter.firstChild);
-                    const lb = this.createLineButtons(currentStartLine);
-                    fragButtons.insertBefore(lb, fragButtons.firstChild);
-                    changed = true;
-                }
-
-                this.codeContent.insertBefore(fragCode, this.codeContent.children[1]);
-                this.gutter.insertBefore(fragGutter, this.gutter.children[1]);
-                this.buttonsColumn.insertBefore(fragButtons, this.buttonsColumn.children[1]);
-            }
-
-            // add below (using fragment)
-            if (currentEndLine < endLine - 1) {
-                const fragCode = document.createDocumentFragment();
-                const fragGutter = document.createDocumentFragment();
-                const fragButtons = document.createDocumentFragment();
-
-                while (currentEndLine < endLine - 1) {
-                    currentEndLine++;
-                    const nodes = code.getLineNodes(currentEndLine);
-                    fragCode.appendChild(this.createLineWrapper(currentEndLine, nodes));
-                    fragGutter.appendChild(this.createLineNumber(currentEndLine));
-                    fragButtons.appendChild(this.createLineButtons(currentEndLine));
-                    changed = true;
-                }
-
-                this.codeContent.insertBefore(fragCode, bottomSpacer);
-                this.gutter.insertBefore(fragGutter, gutterBottomSpacer);
-                this.buttonsColumn.insertBefore(fragButtons, btnBottomSpacer);
-            }
-
         }
     
-        if (!changed) { return }
+        // --- delete above ---
+        while (currentStartLine < startLine && this.codeContent.children.length > 2) {
+            this.codeContent.removeChild(this.codeContent.children[1]);
+            this.gutter.removeChild(this.gutter.children[1]);
+            this.buttonsColumn.removeChild(this.buttonsColumn.children[1]);
+            currentStartLine++;
+            changed = true;
+        }
     
-        // update spacers heights
-        const topHeight = startLine * lineHeight;
-        const bottomHeight = (totalLines - endLine) * lineHeight;
+        // --- delete below ---
+        while (currentEndLine > endLine && this.codeContent.children.length > 2) {
+            this.codeContent.removeChild(this.codeContent.children[this.codeContent.children.length - 2]);
+            this.gutter.removeChild(this.gutter.children[this.gutter.children.length - 2]);
+            this.buttonsColumn.removeChild(this.buttonsColumn.children[this.buttonsColumn.children.length - 2]);
+            currentEndLine--;
+            changed = true;
+        }
+    
+        // --- dynamically calculate maxLineWidth for stable vertical scroll ---
+        let maxLineWidth = this.maxLineWidth || 0;
+    
+        // --- add above ---
+        while (currentStartLine > startLine) {
+            currentStartLine--;
+            const nodes = code.getLineNodes(currentStartLine);
+            const lineEl = this.createLineWrapper(currentStartLine, nodes);
+    
+            // measure line width
+            this.container.appendChild(lineEl);
+            const width = lineEl.scrollWidth;
+            this.container.removeChild(lineEl);
+            if (width > maxLineWidth) maxLineWidth = width;
+    
+            this.codeContent.insertBefore(lineEl, this.codeContent.children[1]);
+            this.gutter.insertBefore(this.createLineNumber(currentStartLine), this.gutter.children[1]);
+            this.buttonsColumn.insertBefore(this.createLineButtons(currentStartLine), this.buttonsColumn.children[1]);
+    
+            changed = true;
+        }
+    
+        // --- add below ---
+        while (currentEndLine < endLine) {
+            const nodes = code.getLineNodes(currentEndLine);
+            const lineEl = this.createLineWrapper(currentEndLine, nodes);
+    
+            // measure line width
+            this.container.appendChild(lineEl);
+            const width = lineEl.scrollWidth;
+            this.container.removeChild(lineEl);
+            if (width > maxLineWidth) maxLineWidth = width;
+    
+            this.codeContent.insertBefore(lineEl, bottomSpacer);
+            this.gutter.insertBefore(this.createLineNumber(currentEndLine), gutterBottomSpacer);
+            this.buttonsColumn.insertBefore(this.createLineButtons(currentEndLine), btnBottomSpacer);
+    
+            currentEndLine++;
+            changed = true;
+        }
+    
+        // update global max line width
+        this.maxLineWidth = maxLineWidth;
+        this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
+    
+        if (!changed) return;
+    
+        // --- update spacers with rounding ---
+        const visibleCount = endLine - startLine;
+        const topHeight = Math.round(startLine * lineHeight);
+        const bottomHeight = Math.round(Math.max(0, (totalLines - endLine) * lineHeight));
     
         topSpacer.style.height = `${topHeight}px`;
         bottomSpacer.style.height = `${bottomHeight}px`;
@@ -492,19 +515,30 @@ export class AnycodeEditor {
     
         btnTopSpacer.style.height = `${topHeight}px`;
         btnBottomSpacer.style.height = `${bottomHeight}px`;
-
-        const fullHeight = this.codeContent.scrollHeight;
-        const newFullHeight = totalLines * this.settings.lineHeight;
-
-        if (newFullHeight !== fullHeight) {
-            this.gutter.style.height = `${fullHeight}px`;
-            this.buttonsColumn.style.height = `${fullHeight}px`;
-            this.codeContent.style.height = `${fullHeight}px`;
-        }
+    
+        const totalHeight = topHeight + visibleCount * lineHeight + bottomHeight;
+        const expectedHeight = totalLines * lineHeight;
+        const containerScrollHeight = this.container.scrollHeight;
+        const containerClientHeight = this.container.clientHeight;
+    
+        // console.log("[SCROLL DEBUG]", {
+        //     startLine,
+        //     endLine,
+        //     visibleCount,
+        //     topHeight,
+        //     bottomHeight,
+        //     totalHeight,
+        //     expectedHeight,
+        //     containerScrollHeight,
+        //     containerClientHeight,
+        //     maxLineWidth,
+        //     childrenCount: this.codeContent.children.length
+        // });
     
         this.renderCursorOrSelection();
     }
     
+        
 
     public renderCursorOrSelection() {
         // console.log('renderCursorOrSelection');
@@ -957,6 +991,7 @@ export class AnycodeEditor {
         // Then render based on what changed
         if (textChanged) {
             // Text changed - full re-render
+            this.maxLineWidth = 0
             this.renderChanges();
             this.renderCursorOrSelection();
         } else if (selectionChanged) {

@@ -10,3 +10,6 @@ build-frontend:
 
 run-backend:
     cd anycode-backend && pnpm run dev
+
+run-backend-rust:
+    cd anycode-backend-rust && cargo run --release

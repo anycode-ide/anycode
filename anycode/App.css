@@ -309,7 +309,7 @@
     height: 100%;
     position: relative;
 }
-/* 
+
 .file-system-panel::after {
     content: '';
     position: absolute;
@@ -318,7 +318,7 @@
     bottom: 0;
     width: 1px;
     background: linear-gradient(to bottom, transparent, #555, transparent);
-} */
+} 
 
 
 
