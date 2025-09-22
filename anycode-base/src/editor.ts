@@ -356,7 +356,6 @@ export class AnycodeEditor {
             const width = lineWrapper.scrollWidth;
             this.container.removeChild(lineWrapper);
             if (width > maxLineWidth) maxLineWidth = width;
-            
             codeFragment.appendChild(lineWrapper);
         }
         codeFragment.appendChild(this.createSpacer(paddingBottom));
@@ -370,7 +369,7 @@ export class AnycodeEditor {
         this.maxLineWidth = maxLineWidth;
         this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
         
-        this.renderCursorOrSelection();
+        this.renderCursorOrSelection(false);
     }
 
     private ensureSpacers(container: HTMLElement) {
@@ -387,21 +386,8 @@ export class AnycodeEditor {
         const lineHeight = this.settings.lineHeight;
     
         // round scrollTop and viewportHeight for stability
-        const scrollTop = Math.floor(this.container.scrollTop);
-        const viewportHeight = Math.floor(this.container.clientHeight);
         const buffer = this.settings.buffer;
-    
-        // startLine inclusive
-        const startLine = Math.max(0, Math.floor(scrollTop / lineHeight) - buffer);
-    
-        // количество видимых строк в viewport
-        const visibleLinesInViewport = Math.floor(viewportHeight / lineHeight);
-    
-        // endLine exclusive
-        const endLine = Math.min(
-            totalLines,
-            startLine + visibleLinesInViewport + buffer * 2
-        );
+        const { startLine, endLine } = this.getVisibleRange();
     
         const code = this.code;
     
@@ -503,7 +489,6 @@ export class AnycodeEditor {
         if (!changed) return;
     
         // --- update spacers with rounding ---
-        const visibleCount = endLine - startLine;
         const topHeight = Math.round(startLine * lineHeight);
         const bottomHeight = Math.round(Math.max(0, (totalLines - endLine) * lineHeight));
     
@@ -516,10 +501,11 @@ export class AnycodeEditor {
         btnTopSpacer.style.height = `${topHeight}px`;
         btnBottomSpacer.style.height = `${bottomHeight}px`;
     
-        const totalHeight = topHeight + visibleCount * lineHeight + bottomHeight;
-        const expectedHeight = totalLines * lineHeight;
-        const containerScrollHeight = this.container.scrollHeight;
-        const containerClientHeight = this.container.clientHeight;
+        // const visibleCount = endLine - startLine;
+        // const totalHeight = topHeight + visibleCount * lineHeight + bottomHeight;
+        // const expectedHeight = totalLines * lineHeight;
+        // const containerScrollHeight = this.container.scrollHeight;
+        // const containerClientHeight = this.container.clientHeight;
     
         // console.log("[SCROLL DEBUG]", {
         //     startLine,
@@ -535,16 +521,16 @@ export class AnycodeEditor {
         //     childrenCount: this.codeContent.children.length
         // });
     
-        this.renderCursorOrSelection();
+        this.renderCursorOrSelection(false);
     }
     
         
 
-    public renderCursorOrSelection() {
+    public renderCursorOrSelection(focus: boolean = false) {
         // console.log('renderCursorOrSelection');
 
         if (!this.selection || this.selection.isEmpty()) {
-            this.updateCursor(false);
+            this.updateCursor(focus);
         } else {
             this.ignoreNextSelectionSet = true;
 
@@ -990,10 +976,10 @@ export class AnycodeEditor {
         
         // Then render based on what changed
         if (textChanged) {
-            // Text changed - full re-render
+            // Text changed - rerender changes
             this.maxLineWidth = 0
             this.renderChanges();
-            this.renderCursorOrSelection();
+            this.renderCursorOrSelection(true);
         } else if (selectionChanged) {
             // Only selection changed - render selection
             if (this.selection) {
