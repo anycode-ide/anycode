@@ -524,7 +524,6 @@ export class AnycodeEditor {
     }
 
     public renderCursorOrSelection(focus: boolean = false) {
-        // console.log('renderCursorOrSelection');
 
         if (!this.selection || this.selection.isEmpty()) {
             this.updateCursor(focus);
