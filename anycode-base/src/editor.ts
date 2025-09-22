@@ -385,7 +385,6 @@ export class AnycodeEditor {
         const totalLines = this.code.linesLength();
         const lineHeight = this.settings.lineHeight;
     
-        // round scrollTop and viewportHeight for stability
         const buffer = this.settings.buffer;
         const { startLine, endLine } = this.getVisibleRange();
     
