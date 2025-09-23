@@ -1,13 +1,16 @@
-export interface FileItem {
+export interface DirectoryResponse {
+  files: string[];
+  dirs: string[];
   name: string;
-  type: 'file' | 'directory';
-  size?: number;
-  path: string;
+  fullpath: string;
+  relative_path: string;
 }
 
-export interface DirectoryResponse {
-  path: string;
-  files: FileItem[];
+export interface DirectoryErrorResponse {
+  error: string;
+  name: string;
+  fullpath: string;
+  relative_path: string;
 }
 
 export interface FileContentResponse {

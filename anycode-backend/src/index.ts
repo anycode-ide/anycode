@@ -5,7 +5,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import * as os from 'node:os';
 import * as pty from 'node-pty';
-import { FileItem } from './types';
+import { DirectoryResponse, DirectoryErrorResponse } from './types';
 import fastifyStatic from '@fastify/static';
 
 const fastify = Fastify({ logger: true });
@@ -19,10 +19,9 @@ var activeTerminalConnections: Set<Socket> = new Set();
 type OpenFolderPayload = { path: string };
 type OpenFilePayload = { path: string };
 type SaveFilePayload = { path: string, content: string };
-type TerminalInitPayload = { operation: 'init', cols?: number, rows?: number };
-type TerminalResizePayload = { operation: 'resize', cols: number, rows: number };
-type TerminalDataPayload = { operation: 'data', content: string };
-type TerminalPayload = TerminalInitPayload | TerminalResizePayload | TerminalDataPayload;
+type TerminalInitPayload = { name: string, session: string, cols?: number, rows?: number };
+type TerminalResizePayload = { name: string, session: string, cols: number, rows: number };
+type TerminalDataPayload = { name: string, session: string, input: string,  };
 
 const getShell = () => {
   if (os.platform() === 'win32') return 'powershell.exe';
@@ -44,19 +43,19 @@ const createTerminal = (cols: number = 80, rows: number = 30) => {
   return ptyProcess;
 }
 
-const attachTerminal = (ptyProcess: pty.IPty, socket: Socket, cols: number = 80, rows: number = 30) => {
+const attachTerminal = (name: string, ptyProcess: pty.IPty, socket: Socket, cols: number = 80, rows: number = 30) => {
   if (activeTerminalConnections.has(socket)) return
 
   activeTerminalConnections.add(socket);
   console.log(`Terminal attached to Socket.IO connection. Total active connections: ${activeTerminalConnections.size}`);
 
   const dataHandler = (data: string) => {
-    socket.emit('terminal', data);
+    socket.emit('terminal:data:' + name, data);
   };
 
   const exitHandler = ({ exitCode, signal }: { exitCode: number, signal?: number }) => {
     console.log(`Terminal process exited with code ${exitCode} and signal ${signal}`);
-    socket.emit('terminal', `\r\nProcess exited with code ${exitCode}\r\n`);
+    socket.emit('terminal:data:' + name, `\r\nProcess exited with code ${exitCode}\r\n`);
   };
 
   const dataDisposable = ptyProcess.onData(dataHandler);
@@ -78,45 +77,39 @@ const detachTerminal = (socket: Socket) => {
   console.log(`Terminal detached from Socket.IO connection. Active connections: ${activeTerminalConnections.size}`);
 };
 
-async function getDirectoryContents(dirPath: string): Promise<FileItem[]> {
+async function getDirectoryContents(dirPath: string): Promise<{ files: string[], dirs: string[] }> {
   try {
     const items = await fs.readdir(dirPath, { withFileTypes: true });
-    const result: FileItem[] = [];
+    const files: string[] = [];
+    const dirs: string[] = [];
 
     for (const item of items) {
       const fullPath = path.join(dirPath, item.name);
-      const relativePath = path.relative(WORKSPACE_ROOT, fullPath);
+      
+      // Skip hidden files and common ignored patterns
+      if (item.name.startsWith('.') || 
+          item.name === 'node_modules' || 
+          item.name === 'dist' || 
+          item.name === 'build' ||
+          item.name === 'target') {
+        continue;
+      }
       
       if (item.isDirectory()) {
-        result.push({
-          name: item.name,
-          type: 'directory',
-          path: relativePath || '.'
-        });
+        dirs.push(item.name);
       } else if (item.isFile()) {
-        try {
-          const stats = await fs.stat(fullPath);
-          result.push({
-            name: item.name,
-            type: 'file',
-            size: stats.size,
-            path: relativePath || '.'
-          });
-        } catch (error) {
-          console.warn(`Cannot access file: ${fullPath}`);
-        }
+        files.push(item.name);
       }
     }
 
-    return result.sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === 'directory' ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    // Sort both arrays alphabetically
+    dirs.sort((a, b) => a.localeCompare(b));
+    files.sort((a, b) => a.localeCompare(b));
+
+    return { files, dirs };
   } catch (error) {
     console.error(`Error reading directory ${dirPath}:`, error);
-    return [];
+    return { files: [], dirs: [] };
   }
 }
 
@@ -147,109 +140,133 @@ function emitMessage(socket: Socket, type: string, data: any) {
   socket.emit(type, data);
 }
 
+const handleTerminalInit = (socket: Socket, data: TerminalInitPayload) => {
+  if (!ptyProcess) {
+    ptyProcess = createTerminal(data.cols, data.rows);
+    attachTerminal(data.name, ptyProcess, socket, data.cols, data.rows);
+    console.log('Terminal initialized and attached to Socket.IO connection');
+  } else {
+    console.log('Terminal already initialized, attaching to existing process');
+    console.log(`Active connections before attach: ${activeTerminalConnections.size}`);
+    attachTerminal(data.name, ptyProcess, socket, data.cols, data.rows);
+    console.log(`Active connections after attach: ${activeTerminalConnections.size}`);
+    if (data.cols && data.rows) {
+      ptyProcess.resize(data.cols, data.rows);
+    }
+  }
+};
+
+const handleTerminalResize = (socket: Socket, data: TerminalResizePayload) => {
+  if (!ptyProcess) {
+    console.log('Terminal not initialized, cannot resize');
+    emitMessage(socket, 'error', { message: 'Terminal not initialized' });
+  } else {
+    console.log(`Resizing terminal to: cols=${data.cols}, rows=${data.rows}`);
+    ptyProcess.resize(data.cols, data.rows);
+  }
+};
+
+const handleTerminalInput = (socket: Socket, data: TerminalDataPayload) => {
+  if (!ptyProcess) {
+    console.log('Terminal not initialized, cannot send data');
+    emitMessage(socket, 'error', { message: 'Terminal not initialized' });
+  } else {
+    let { input } = data;
+    console.log(`Sending data to terminal: "${input}"`);
+    ptyProcess.write(input);
+  }
+};
+
 const registerSocketHandlers = (socket: Socket) => {
-  socket.on('openfolder', async (data: OpenFolderPayload) => {
+  socket.on('openfolder', async (data: OpenFolderPayload, ack: Function) => {
     try {
       const dirPath = path.resolve(WORKSPACE_ROOT, data.path);
       if (!dirPath.startsWith(WORKSPACE_ROOT)) {
-        emitMessage(socket, 'error', { message: 'Access denied: path outside workspace' });
+        if (ack) {
+          ack({ error: 'Access denied: path outside workspace' });
+        }
         return;
       }
-      const files = await getDirectoryContents(dirPath);
-      emitMessage(socket, 'directory', { path: data.path, name: getDirectoryName(data.path), files });
+      
+      const { files, dirs } = await getDirectoryContents(dirPath);
+      const name = getDirectoryName(data.path);
+      const fullpath = dirPath;
+      const relative_path = path.relative(WORKSPACE_ROOT, dirPath) || '.';
+      
+      if (ack) {
+        ack({ 
+          files, 
+          dirs, 
+          name, 
+          fullpath, 
+          relative_path 
+        });
+      }
     } catch (error) {
-      emitMessage(socket, 'error', { message: `Failed to open folder: ${data.path}` });
+      console.error(`Error reading directory ${data.path}:`, error);
+      if (ack) {
+        ack({ 
+          error: `Failed to open directory: ${error}`,
+          name: getDirectoryName(data.path),
+          fullpath: path.resolve(WORKSPACE_ROOT, data.path),
+          relative_path: data.path
+        });
+      }
     }
   });
 
-  socket.on('openfile', async (data: OpenFilePayload) => {
+  socket.on('openfile', async (data: OpenFilePayload, ack: Function) => {
     try {
       const content = await getFileContent(data.path);
-      emitMessage(socket, 'filecontent', { path: data.path, content });
+      if (ack) {
+        ack({ success: true, path: data.path, content });
+      }
     } catch (error) {
-      emitMessage(socket, 'error', { message: `Failed to read file: ${data.path}` });
+      if (ack) {
+        ack({ success: false, error: `Failed to read file: ${data.path}` });
+      }
     }
   });
 
-  socket.on('savefile', async (data: SaveFilePayload) => {
+  socket.on('savefile', async (data: SaveFilePayload, ack: Function) => {
     try {
       const fullPath = path.resolve(WORKSPACE_ROOT, data.path);
       if (!fullPath.startsWith(WORKSPACE_ROOT)) {
-        emitMessage(socket, 'error', { message: 'Access denied: file path outside workspace' });
+        if (ack) {
+          ack({ success: false, error: 'Access denied: file path outside workspace' });
+        }
         return;
       }
       const dirPath = path.dirname(fullPath);
       await fs.mkdir(dirPath, { recursive: true });
       await fs.writeFile(fullPath, data.content, 'utf-8');
-      emitMessage(socket, 'filesaved', { path: data.path, success: true, message: 'File saved successfully' });
+      if (ack) {
+        ack({ success: true, path: data.path, message: 'File saved successfully' });
+      }
       console.log(`File saved: ${data.path}`);
     } catch (error) {
       console.error(`Error saving file ${data.path}:`, error);
-      emitMessage(socket, 'error', { message: `Failed to save file: ${data.path}` });
+      if (ack) {
+        ack({ success: false, error: `Failed to save file: ${data.path}` });
+      }
     }
   });
 
-  socket.on('terminal', (data: TerminalPayload) => {
-    if (!data || !data.operation) {
-      console.log('Terminal message missing operation type, ignoring');
-      return;
-    }
-    switch (data.operation) {
-      case 'init':
-        if (!ptyProcess) {
-          ptyProcess = createTerminal(data.cols, data.rows);
-          attachTerminal(ptyProcess, socket, data.cols, data.rows);
-          console.log('Terminal initialized and attached to Socket.IO connection');
-        } else {
-          console.log('Terminal already initialized, attaching to existing process');
-          console.log(`Active connections before attach: ${activeTerminalConnections.size}`);
-          attachTerminal(ptyProcess, socket, data.cols, data.rows);
-          console.log(`Active connections after attach: ${activeTerminalConnections.size}`);
-          if (data.cols && data.rows) {
-            ptyProcess.resize(data.cols, data.rows);
-          }
-        }
-        break;
-      case 'resize':
-        if (!ptyProcess) {
-          console.log('Terminal not initialized, cannot resize');
-          emitMessage(socket, 'error', { message: 'Terminal not initialized' });
-        } else if (!data.cols || !data.rows) {
-          console.log('Resize operation missing cols or rows');
-          emitMessage(socket, 'error', { message: 'Resize operation requires cols and rows' });
-        } else {
-          console.log(`Resizing terminal to: cols=${data.cols}, rows=${data.rows}`);
-          ptyProcess.resize(data.cols, data.rows);
-        }
-        break;
-      case 'data':
-        if (!ptyProcess) {
-          console.log('Terminal not initialized, cannot send data');
-          emitMessage(socket, 'error', { message: 'Terminal not initialized' });
-        } else if (!data.content) {
-          console.log('Data operation missing content');
-          emitMessage(socket, 'error', { message: 'Data operation requires content' });
-        } else {
-          console.log(`Sending data to terminal: "${data.content}"`);
-          ptyProcess.write(data.content);
-        }
-        break;
-      default:
-        console.log('Unknown terminal operation received');
-        emitMessage(socket, 'error', { message: 'Unknown terminal operation' });
-    }
+  socket.on('terminal:start', (data: TerminalInitPayload) => {
+    handleTerminalInit(socket, data);
+  });
+
+  socket.on('terminal:resize', (data: TerminalResizePayload) => {
+    handleTerminalResize(socket, data);
+  });
+
+  socket.on('terminal:input', (data: TerminalDataPayload) => {
+    handleTerminalInput(socket, data);
   });
 };
 
 const handleSocketConnection = (socket: Socket) => {
   console.log('Client connected');  
-  getDirectoryContents(WORKSPACE_ROOT).then(files => {
-    emitMessage(socket, 'directory', {
-      path: '.', name: getDirectoryName('.'), files
-    });
-  }).catch(error => {
-    emitMessage(socket, 'error', { message: 'Failed to read root directory' });
-  });
   registerSocketHandlers(socket);
   socket.on('disconnect', () => handleSocketDisconnect(socket));
   socket.on('error', (error: Error) => handleSocketError(socket, error));

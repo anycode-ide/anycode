@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { AnycodeEditorReact, AnycodeEditor, Edit, Operation } from 'anycode-react';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
-import { TreeNodeComponent, TreeNode, FileState, FileSystemItem, DebugInfo, TerminalComponent } from './components';
+import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } from './components';
 import { DEFAULT_FILE, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
 import './App.css';
 
@@ -31,6 +31,8 @@ const App: React.FC = () => {
     const [terminalVisible, setTerminalVisible] = useState<boolean>(false);
     
     // Terminal state
+    const terminalNameRef = useRef<string>('terminal');
+    const terminalSessionRef = useRef<string>('anycode');
     const terminalColsRef = useRef<number>(60);
     const terminalRowsRef = useRef<number>(20);
     const terminalMessageHandlerRef = useRef<((data: string) => void) | null>(null);
@@ -134,7 +136,11 @@ const App: React.FC = () => {
         if (terminalVisible && isConnected && wsRef.current) {
             console.log('App: Initializing terminal on backend');
             // Initialize terminal when it becomes visible using new protocol
-            wsRef.current.emit('terminal', { operation: 'init', cols: terminalColsRef.current, rows: terminalRowsRef.current });
+            wsRef.current.emit('terminal:start', { 
+                name: terminalNameRef.current, 
+                session: terminalSessionRef.current,
+                cols: terminalColsRef.current, rows: terminalRowsRef.current 
+            });
         } else {
             console.log('App: Cannot initialize terminal:', {
                 terminalVisible,
@@ -255,27 +261,28 @@ const App: React.FC = () => {
     const saveFile = (fileId: string) => {
         const currentContent = fileContentsRef.current.get(fileId);
         if (currentContent !== undefined) {
-            // update local state
-            setFiles(prev => prev.map(file => 
-                file.id === fileId 
-                    ? { ...file, content: currentContent, isDirty: false }
-                    : file
-            ));
-            
-            // send file to backend
+            // send file to backend with ack
             if (wsRef.current && isConnected) {
-                wsRef.current.send(JSON.stringify({
-                    type: 'savefile',
-                    data: {
-                        path: fileId,
-                        content: currentContent
-                    }
-                }));
+                wsRef.current.emit('savefile', { path: fileId, content: currentContent }, handleSaveFileResponse);
             }
         }
-        
-        dirtyFlagsRef.current.set(fileId, false);
-        setDirtyFlags(prev => new Map(prev).set(fileId, false));
+    };
+
+    const handleSaveFileResponse = (response: any) => {
+        if (response.success) {
+            console.log('File saved successfully:', response);
+            // update local state after successful save
+            setFiles(prev => prev.map(file => 
+                file.id === response.path 
+                    ? { ...file, content: fileContentsRef.current.get(response.path) || file.content, isDirty: false }
+                    : file
+            ));
+            dirtyFlagsRef.current.set(response.path, false);
+            setDirtyFlags(prev => new Map(prev).set(response.path, false));
+        } else {
+            console.error('Failed to save file:', response.error);
+            // Handle error - could show a notification or alert
+        }
     };
 
     const renameFile = (fileId: string, newName: string) => {
@@ -324,11 +331,16 @@ const App: React.FC = () => {
                 setConnectionError(null);
                 // Reset reconnect attempts on successful connection
                 reconnectAttemptsRef.current = 0;
-                
+
+                // Load root directory
+                openFolder('.');
+
                 // Initialize terminal
                 if (terminalVisible) {
                     console.log('App: Initializing terminal after WebSocket connection');
-                    ws.emit('terminal', { operation: 'init' });
+                    ws.emit('terminal:start', { 
+                        name: terminalNameRef.current, session: terminalSessionRef.current 
+                    });
                 } else {
                     console.log('App: Terminal not visible, skipping initialization');
                 }
@@ -347,78 +359,12 @@ const App: React.FC = () => {
             });
 
             // message handlers
-            ws.on('directory', (data) => {
-                console.log('Received directory:', data);
-                if (data.path === '.') {
-                    let children = convertToTree(data.files);
-                    const rootNode = {
-                        id: '.',
-                        name: data.name || 'Root',
-                        type: 'directory' as const,
-                        path: '.',
-                        children: children,
-                        isExpanded: true,
-                        isSelected: false,
-                        isLoading: false,
-                        hasLoaded: true
-                    };
-                    setFileTree([rootNode]);
-                } else {
-                    setFileTree(prevTree => {
-                        const updateNode = (nodes: TreeNode[]): TreeNode[] => {
-                            return nodes.map(node => {
-                                if (node.path === data.path) {
-                                    let children = convertToTree(data.files);
-                                    node.children?.forEach(child => {
-                                        child.isSelected = child.id === activeFileId;
-                                    })
-                                    return {
-                                        ...node, children: children,
-                                        isLoading: false, hasLoaded: true, isExpanded: true
-                                    };
-                                }
-                                if (node.children) {
-                                    return { ...node, children: updateNode(node.children) };
-                                }
-                                return node;
-                            });
-                        };
-                        return updateNode(prevTree);
-                    });
-                }
-                setCurrentPath(data.path);
-            });
-
-            ws.on('filecontent', (data) => {
-                console.log('Received file content:', data);
-                const { path, content } = data;
-                const existingFile = files.find(file => file.id === path);                
-                if (existingFile) {
-                    setActiveFileId(existingFile.id);
-                    return;
-                }
-                const fileName = path.split('/').pop() || 'untitled';
-                const language = getLanguageFromFileName(fileName);
-                const newFile: FileState = {
-                    id: path,  name: fileName, language, content: content
-                };
-                setFiles(prev => [...prev, newFile]);
-                setActiveFileId(newFile.id);
-            });
-
-            ws.on('filesaved', (data) => {
-                console.log('File saved:', data);
-                if (data.success) {
-                    console.log(`File ${data.path} saved on server`);
-                }
-            });
-
             ws.on('error', (data) => {
                 console.error('Backend error:', data);
                 setConnectionError(data.message);
             });
 
-            ws.on('terminal', (data: string) => {
+            ws.on('terminal:data:' + terminalNameRef.current, (data: string) => {
                 if (terminalMessageHandlerRef.current) {
                     terminalMessageHandlerRef.current(data);
                 }
@@ -451,7 +397,11 @@ const App: React.FC = () => {
     const handleTerminalData = useCallback((name: string, data: string) => {
         // console.log('App: Terminal data received:', data);
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('terminal', { operation: 'data', content: data });
+            wsRef.current.emit('terminal:input', { 
+                name: terminalNameRef.current, 
+                session: terminalSessionRef.current,
+                input: data 
+            });
         }
     }, [isConnected]);
 
@@ -465,14 +415,69 @@ const App: React.FC = () => {
         terminalColsRef.current = cols;
         terminalRowsRef.current = rows;
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('terminal', { operation: 'resize', cols: cols, rows: rows });
+            wsRef.current.emit('terminal:resize', { 
+                name: terminalNameRef.current, 
+                session: terminalSessionRef.current,
+                cols: cols, rows: rows 
+            });
         }
     }, [isConnected]);
 
     const openFolder = (path: string) => {
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('openfolder', { path });
+            wsRef.current.emit('openfolder', { path }, handleOpenFolderResponse);
         }
+    };
+
+    const handleOpenFolderResponse = (response: any) => {
+        if (response.error) {
+            console.error('Failed to open folder:', response.error);
+            // Handle error - could show a notification or alert
+            return;
+        }
+        
+        console.log('Received directory via ack:', response);
+        
+        if (response.relative_path === '.') {
+            let children = convertToTree(response.files, response.dirs, '.');
+            const rootNode = {
+                id: '.',
+                name: response.name || 'Root',
+                type: 'directory' as const,
+                path: '.',
+                children: children,
+                isExpanded: true,
+                isSelected: false,
+                isLoading: false,
+                hasLoaded: true
+            };
+            setFileTree([rootNode]);
+        } else {
+            setFileTree(prev => {
+                const updateNode = (nodes: TreeNode[]): TreeNode[] => {
+                    return nodes.map(node => {
+                        if (node.id === response.relative_path) {
+                            return {
+                                ...node,
+                                children: convertToTree(response.files, response.dirs, response.relative_path),
+                                isExpanded: true,
+                                isLoading: false,
+                                hasLoaded: true
+                            };
+                        }
+                        if (node.children) {
+                            return {
+                                ...node,
+                                children: updateNode(node.children)
+                            };
+                        }
+                        return node;
+                    });
+                };
+                return updateNode(prev);
+            });
+        }
+        setCurrentPath(response.relative_path);
     };
 
     const openFile = (path: string) => {
@@ -488,12 +493,28 @@ const App: React.FC = () => {
             setActiveFileId(existingFile.id);
             return;
         }
-        
-        console.log('File not open, requesting content from server');
-        // if file is not open, request its content
+                
+        // if file is not open, request its content with ack
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('openfile', { path });
+            wsRef.current.emit('openfile', { path }, (response: any) => { 
+                if (response.success) {
+                    handleOpenFileResponse(path, response.content) 
+                } else {
+                    console.error('Failed to open file:', response.error);
+                    // Handle error - could show a notification or alert
+                }
+            });
         }
+    };
+
+    const handleOpenFileResponse = (path: string, content: string) => {
+        const fileName = path.split('/').pop() || 'untitled';
+        const language = getLanguageFromFileName(fileName);
+        const newFile: FileState = {
+            id: path, name: fileName, language, content: content
+        };
+        setFiles(prev => [...prev, newFile]);
+        setActiveFileId(newFile.id);
     };
 
     const getLanguageFromFileName = (fileName: string): string => {
@@ -502,19 +523,41 @@ const App: React.FC = () => {
     };
 
     // Tree functions
-    const convertToTree = (items: FileSystemItem[]): TreeNode[] => {
-        return items.map(item => ({
-            id: item.path,
-            name: item.name,
-            type: item.type,
-            path: item.path,
-            size: item.size,
-            children: [],
-            isExpanded: false,
-            isSelected: false,
-            isLoading: false,
-            hasLoaded: false
-        }));
+    const convertToTree = (files: string[], dirs: string[], basePath: string): TreeNode[] => {
+        const treeNodes: TreeNode[] = [];
+        
+        // Add directories first
+        dirs.forEach(dirName => {
+            const dirPath = basePath === '.' ? dirName : `${basePath}/${dirName}`;
+            treeNodes.push({
+                id: dirPath,
+                name: dirName,
+                type: 'directory',
+                path: dirPath,
+                children: [],
+                isExpanded: false,
+                isSelected: false,
+                isLoading: false,
+                hasLoaded: false
+            });
+        });
+        
+        // Add files
+        files.forEach(fileName => {
+            const filePath = basePath === '.' ? fileName : `${basePath}/${fileName}`;
+            treeNodes.push({
+                id: filePath,
+                name: fileName,
+                type: 'file',
+                path: filePath,
+                isExpanded: false,
+                isSelected: false,
+                isLoading: false,
+                hasLoaded: false
+            });
+        });
+        
+        return treeNodes;
     };
 
     const toggleNode = (nodeId: string) => {
@@ -572,6 +615,10 @@ const App: React.FC = () => {
             }
         }
     }, [fileTree])
+
+    useEffect(() => {
+        if (isConnected && wsRef.current) openFolder('.');
+      }, [isConnected]);
 
     // Connect to backend on component mount
     useEffect(() => {

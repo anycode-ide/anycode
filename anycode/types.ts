@@ -25,7 +25,32 @@ export interface FileSystemItem {
     path: string;
 }
 
-export interface FileSystemDirectory {
-    path: string;
-    files: FileSystemItem[];
+export interface DirectoryResponse {
+    files: string[];
+    dirs: string[];
+    name: string;
+    fullpath: string;
+    relative_path: string;
+}
+
+export interface DirectoryErrorResponse {
+    error: string;
+    name: string;
+    fullpath: string;
+    relative_path: string;
+}
+
+// Terminal protocol types
+export interface TerminalInitPayload {
+    cols?: number;
+    rows?: number;
+}
+
+export interface TerminalResizePayload {
+    cols: number;
+    rows: number;
+}
+
+export interface TerminalDataPayload {
+    content: string;
 }
