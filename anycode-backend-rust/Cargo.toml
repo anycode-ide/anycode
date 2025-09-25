@@ -1,0 +1,48 @@
+[package]
+name = "anycode"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+# opt-level = 3
+# strip = true
+# lto = true
+panic = 'abort'
+
+[dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
+tokio = { version = "1.36.0", features = ["full"] }
+socketioxide = { version = "0.17", features = ["state"]}
+serde = { version = "1.0.160", features = ["derive"] }
+serde_json = "1.0"
+axum = { version = "0.8.3", features = ["ws"]}
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"]}
+chrono = { version = "0.4", features = ["serde"] }
+axum_static = "1.2.3"
+log2 = "0.2.1"
+strfmt = "0.2.4"
+toml = "0.8.12"
+detect-lang = "0.1.5"
+ropey = "1.6.1"
+rayon = "1.10.0"
+tokio-util = "0.7.13"
+tokio-stream = "0.1.17"
+tempfile = "3.15.0"
+notify = "8.0"
+portable-pty = "0.9.0"
+anyhow = "1.0.97"
+rmcp = { version = "0.1.5", features = [
+    "client", "transport-sse",
+    "transport-child-process", 
+    "tower"
+] }
+sysinfo = { version = "0.35.1" }
+pathdiff = "0.2.3"
+rust-embed = { version = "8.7.1", features = ["include-exclude"] }
+mime_guess = "2.0.5"
+dirs = "6.0.0"
+shell-words = "1.1.0"
+lsp-types = "0.97.0"
