@@ -361,10 +361,10 @@ export class AnycodeEditor {
         codeFragment.appendChild(this.createSpacer(paddingBottom));
         this.codeContent.replaceChildren(codeFragment);
 
-        const fullHeight = this.codeContent.scrollHeight;
-        this.gutter.style.height = `${fullHeight}px`;
-        this.buttonsColumn.style.height = `${fullHeight}px`;
-        this.codeContent.style.height = `${fullHeight}px`;
+        // const fullHeight = this.codeContent.scrollHeight;
+        // this.gutter.style.height = `${fullHeight}px`;
+        // this.buttonsColumn.style.height = `${fullHeight}px`;
+        // this.codeContent.style.height = `${fullHeight}px`;
         // apply max line width collected during this render
         this.maxLineWidth = maxLineWidth;
         this.codeContent.style.minWidth = `${this.maxLineWidth}px`;

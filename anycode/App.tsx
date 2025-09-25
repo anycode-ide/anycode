@@ -636,72 +636,8 @@ const App: React.FC = () => {
     }, []);
 
     return (
-        <div className="app-container">
-            <div className="toolbar" style={{ height: '20px' }}>
-                <span className={`backend-status ${isConnected ? 'connected' : 'disconnected'}`}>
-                    Anycode
-                </span>
+        <div className={`app-container ${terminalVisible ? 'terminal-visible' : ''}`}>
 
-                <button
-                    onClick={() => setLeftPanelVisible(!leftPanelVisible)}
-                    className={`toggle-tree-btn ${leftPanelVisible ? 'active' : ''}`}
-                    title={leftPanelVisible ? 'Hide File Tree' : 'Show File Tree'}
-                >
-                    Files
-                </button>
-
-                {/* <button
-                    onClick={() => setDebugMode(!debugMode)}
-                    className={`debug-toggle-btn ${debugMode ? 'active' : ''}`}
-                    title={debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
-                >
-                   Debug info
-                </button> */}
-
-                <button
-                    onClick={() => setTerminalVisible(!terminalVisible)}
-                    className={`terminal-toggle-btn ${terminalVisible ? 'active' : ''}`}
-                    title={terminalVisible ? 'Hide Terminal' : 'Show Terminal'}
-                >
-                   Terminal
-                </button>
-
-                <div className="tab-bar" style={{ flex: 1 }}>
-                    {files.map(file => (
-                        <div
-                            key={file.id}
-                            className={`tab ${activeFileId === file.id ? 'active' : ''}`}
-                            onClick={() => setActiveFileId(file.id)}
-                        >
-                            <span className={`tab-dirty-indicator ${dirtyFlags.get(file.id) ? 'dirty' : ''}`}> ● </span>
-                            {editingFileName === file.id ? (
-                                <input
-                                    className="tab-rename-input"
-                                    type="text"
-                                    defaultValue={file.name}
-                                    onBlur={(e) => renameFile(file.id, e.target.value)}
-                                    onKeyDown={(e) => handleRenameKeyDown(e, file.id)}
-                                    autoFocus
-                                />
-                            ) : (
-                                <span className="tab-filename" onDoubleClick={() => startEditingFileName(file.id)} > {file.name} </span>
-                            )}
-                            <button className="tab-close-button" 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    closeFile(file.id);
-                                }}
-                            > × </button>
-
-                        </div>
-                    ))}
-                    <button className="new-file-button" onClick={() => createNewFile()} title="New File">+</button>
-                    
-                </div>
-
-                <span className="language-indicator">{activeFile?.language.toUpperCase()}</span>
-            </div>
-            
             <div className="main-content" style={{ flex: 1, display: 'flex' }}>
                 <Allotment vertical={true} defaultSizes={[70, 30]} separator={true} onVisibleChange={handleTerminalPanelVisibleChange}>
                     <Allotment.Pane snap>
@@ -775,12 +711,76 @@ const App: React.FC = () => {
                                 cols={terminalColsRef.current}
                                 isConnected={isConnected}
                             />
+                            <div className="terminal-spacer"></div>
                         </div>
                     </Allotment.Pane>
                 </Allotment>
             </div>
         
-            
+            <div className="toolbar">
+                <span className={`backend-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                    Anycode
+                </span>
+
+                <button
+                    onClick={() => setLeftPanelVisible(!leftPanelVisible)}
+                    className={`toggle-tree-btn ${leftPanelVisible ? 'active' : ''}`}
+                    title={leftPanelVisible ? 'Hide File Tree' : 'Show File Tree'}
+                >
+                    Files
+                </button>
+
+                {/* <button
+                    onClick={() => setDebugMode(!debugMode)}
+                    className={`debug-toggle-btn ${debugMode ? 'active' : ''}`}
+                    title={debugMode ? 'Hide Debug Info' : 'Show Debug Info'}
+                >
+                   Debug info
+                </button> */}
+
+                <button
+                    onClick={() => setTerminalVisible(!terminalVisible)}
+                    className={`terminal-toggle-btn ${terminalVisible ? 'active' : ''}`}
+                    title={terminalVisible ? 'Hide Terminal' : 'Show Terminal'}
+                >
+                   Terminal
+                </button>
+
+                <div className="tab-bar" style={{ flex: 1 }}>
+                    {files.map(file => (
+                        <div
+                            key={file.id}
+                            className={`tab ${activeFileId === file.id ? 'active' : ''}`}
+                            onClick={() => setActiveFileId(file.id)}
+                        >
+                            <span className={`tab-dirty-indicator ${dirtyFlags.get(file.id) ? 'dirty' : ''}`}> ● </span>
+                            {editingFileName === file.id ? (
+                                <input
+                                    className="tab-rename-input"
+                                    type="text"
+                                    defaultValue={file.name}
+                                    onBlur={(e) => renameFile(file.id, e.target.value)}
+                                    onKeyDown={(e) => handleRenameKeyDown(e, file.id)}
+                                    autoFocus
+                                />
+                            ) : (
+                                <span className="tab-filename" onDoubleClick={() => startEditingFileName(file.id)} > {file.name} </span>
+                            )}
+                            <button className="tab-close-button" 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeFile(file.id);
+                                }}
+                            > × </button>
+
+                        </div>
+                    ))}
+                    <button className="new-file-button" onClick={() => createNewFile()} title="New File">+</button>
+                    
+                </div>
+
+                <span className="language-indicator">{activeFile?.language.toUpperCase()}</span>
+            </div>
         </div>
     );
 };
