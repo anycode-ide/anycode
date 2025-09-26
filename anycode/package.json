@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build && rimraf ../backend/dist && cpy dist ../anycode-backend/public --parents",
+    "build": "vite build && cpy dist ../anycode-backend/public --parents  && cpy dist ../anycode-backend-rust --parents ",
     "preview": "vite preview"
   },
   "keywords": [],

@@ -2,3 +2,6 @@ target
 node_modules
 .DS_Store
 *copy*.ts
+anycode/dist
+anycode-backend-rust/dist
+anycode-backend/public/dist

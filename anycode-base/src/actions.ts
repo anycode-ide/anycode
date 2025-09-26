@@ -68,7 +68,7 @@ export const executeAction = async (
         case Action.COPY: return await handleCopy(ctx);
         case Action.PASTE: return await handlePaste(ctx);
         case Action.CUT: return await handleCut(ctx);
-        case Action.DUPLICATE: return await handleDublicate(ctx);
+        case Action.DUPLICATE: return await handleDuplicate(ctx);
         case Action.COMMENT: return handleToggleComment(ctx);
         default:
             return { ctx, changed: false };
@@ -248,7 +248,7 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
     }
 };
 
-export const handleDublicate = async (ctx: ActionContext): Promise<ActionResult> => {
+export const handleDuplicate = async (ctx: ActionContext): Promise<ActionResult> => {
     let start: number, end: number, textToDuplicate: string, insertPos: number, newOffset: number;
 
     if (ctx.selection && ctx.selection.nonEmpty()) {

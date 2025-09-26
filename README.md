@@ -20,32 +20,33 @@ The project consists of several packages:
 - **`anycode-base/`** - Core editor library with tree-sitter support
 - **`anycode-react/`** - React wrapper for the editor
 - **`anycode-backend/`** - Fastify + Socket.IO backend for file system access
+- **`anycode-backend-rust/`** - Rust backend for file system access - will be main backend in the future
+
 
 ## Quick Start
 
-1. **Install dependencies:**
+1. **Start frontend:**
    ```bash
    pnpm install
-   ```
-
-2. **Install native dependencies (IMPORTANT for terminal support):**
-   ```bash
-   cd anycode-backend
-   npm install
-   ```
-   > **Note**: The backend uses `node-pty` which requires native compilation. Use `npm install` instead of `pnpm` for the backend to ensure proper compilation on your platform.
-
-3. **Start the backend:**
-   ```bash
-   cd anycode-backend
-   pnpm dev
-   ```
-
-4. **Start the frontend:**
-   ```bash
    cd anycode
    pnpm dev
    ```
+
+2. **Select backend - rust or node:**
+
+3. **Start rust backend:**
+   ```bash
+   cd anycode-backend-rust 
+   cargo run --release
+
+3. **Start node backend:**
+   ```bash
+   cd anycode-backend
+   npm install
+   pnpm dev
+
+   ```
+   > **Note**: The node backend uses `node-pty` which requires native compilation. Use `npm install` instead of `pnpm` for the backend to ensure proper compilation on your platform.
 
 5. **Open your browser** and navigate to the frontend URL
 

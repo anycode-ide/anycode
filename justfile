@@ -11,5 +11,5 @@ build-frontend:
 run-backend:
     cd anycode-backend && pnpm run dev
 
-run-backend-rust:
+run-backend-rust: build-frontend
     cd anycode-backend-rust && cargo run --release

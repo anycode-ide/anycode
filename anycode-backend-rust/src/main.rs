@@ -147,7 +147,6 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
     match crate::config::Dist::get(path) {
         Some(content) => {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
-
             ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
         }
         None => {
@@ -221,7 +220,6 @@ async fn main() -> Result<()> {
                             handle_watch_event(path, &event, &socket, &file2code).await
                         }
                     }
-                    
                 },
                 Err(e) => eprintln!("watch error: {:?}", e)
             }
