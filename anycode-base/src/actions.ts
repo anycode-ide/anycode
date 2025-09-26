@@ -26,6 +26,7 @@ export enum Action {
     COPY = 'COPY',
     PASTE = 'PASTE',
     CUT = 'CUT',
+    DUPLICATE = 'DUPLICATE',
     COMMENT = 'COMMENT',
 }
 
@@ -40,7 +41,6 @@ export type ActionResult = {
     changed: boolean;
     ctx: ActionContext;
 };
-
 
 export const executeAction = async (
     action: Action, ctx: ActionContext
@@ -68,12 +68,12 @@ export const executeAction = async (
         case Action.COPY: return await handleCopy(ctx);
         case Action.PASTE: return await handlePaste(ctx);
         case Action.CUT: return await handleCut(ctx);
+        case Action.DUPLICATE: return await handleDublicate(ctx);
         case Action.COMMENT: return handleToggleComment(ctx);
         default:
             return { ctx, changed: false };
     }
 };
-
 
 export const handleTextInput = (ctx: ActionContext): ActionResult => {
     ctx.code.tx();
@@ -116,16 +116,29 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
         return { ctx, changed: false };
     }
 
-    ctx.code.remove(ctx.offset - 1, 1);
-    ctx.offset -= 1;
+    let { line, column } = ctx.code.getPosition(ctx.offset);
+
+    let isRemoveIndent = column > 0 && ctx.code.getIndent() &&
+        ctx.code.isOnlyIndentationBefore(line, column);
+
+    if (isRemoveIndent) {
+        // idea like
+        // let start = ctx.code.getOffset(line, 0);
+
+        // vscode like 
+        let start = ctx.code.getOffset(line, 0) + ctx.code.prevIndentation(line, column);
+        ctx.code.remove(start, ctx.offset - start);
+        ctx.offset = start;
+    } else {
+        ctx.offset -= 1;
+        ctx.code.remove(ctx.offset, 1);
+    }
 
     ctx.code.commit();
+
     return { ctx, changed: true };
 };
 
-/**
- * Handles enter key - inserts newline with proper indentation
- */
 export const handleEnter = (ctx: ActionContext): ActionResult => {
     ctx.code.tx();
 
@@ -133,10 +146,10 @@ export const handleEnter = (ctx: ActionContext): ActionResult => {
         removeSelection(ctx);
     }
 
-    const { line } = ctx.code.getPosition(ctx.offset);
+    const { line, column } = ctx.code.getPosition(ctx.offset);
     const currentLine = ctx.code.line(line);
 
-    const indent = getIndentation(currentLine);
+    const indent = getIndentation(currentLine, column);
     const newlineWithIndent = '\n' + indent;
 
     ctx.code.insert(newlineWithIndent, ctx.offset);
@@ -147,7 +160,6 @@ export const handleEnter = (ctx: ActionContext): ActionResult => {
 
     return { ctx, changed: true };
 };
-
 
 export const handleUndo = (ctx: ActionContext): ActionResult => {
     const transaction = ctx.code.undo();
@@ -185,12 +197,10 @@ export const handleRedo = (ctx: ActionContext): ActionResult => {
     return { ctx, changed: false };
 };
 
-
 export const handleSelectAll = (ctx: ActionContext): ActionResult => {
     ctx.selection = new Selection(0, ctx.code.length());
     return { ctx, changed: true };
 };
-
 
 export const handleCopy = async (ctx: ActionContext): Promise<ActionResult> => {
     if (!ctx.selection || ctx.selection.isEmpty()) {
@@ -237,6 +247,41 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
         return { ctx, changed: false };
     }
 };
+
+export const handleDublicate = async (ctx: ActionContext): Promise<ActionResult> => {
+    let start: number, end: number, textToDuplicate: string, insertPos: number, newOffset: number;
+
+    if (ctx.selection && ctx.selection.nonEmpty()) {
+        // Duplicate the selected text after the selection
+        [start, end] = ctx.selection.sorted();
+        textToDuplicate = ctx.code.getIntervalContent2(start, end);
+        insertPos = end;
+        newOffset = insertPos + textToDuplicate.length;
+    } else {
+        // Duplicate the whole line at the cursor
+        const { line, column } = ctx.code.getPosition(ctx.offset);
+        start = ctx.code.getOffset(line, 0);
+        // Include the line break if not last line
+        if (line < ctx.code.linesLength() - 1) {
+            end = ctx.code.getOffset(line + 1, 0);
+        } else {
+            end = ctx.code.length();
+        }
+        textToDuplicate = ctx.code.getIntervalContent2(start, end);
+        insertPos = end;
+        newOffset = ctx.code.getOffset(line + 1, column);
+    }
+
+    ctx.code.tx();
+    ctx.code.insert(textToDuplicate, insertPos);
+    ctx.code.commit();
+
+    // Move cursor to the start of the duplicated text
+    ctx.offset = newOffset;
+    ctx.selection = undefined;
+
+    return { ctx, changed: true };
+}
 
 export const handleCut = async (ctx: ActionContext): Promise<ActionResult> => {
     if (!ctx.selection || ctx.selection.isEmpty()) {
@@ -404,9 +449,6 @@ export const handleToggleComment = (ctx: ActionContext): ActionResult => {
     return { ctx, changed: true };
 };
 
-
-// ===== NAVIGATION FUNCTIONS =====
-
 export const moveArrowDown = (ctx: ActionContext): ActionResult => {
     if (ctx.offset < 0) return { ctx, changed: false };
 
@@ -468,6 +510,7 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
     if (ctx.offset >= ctx.code.length()) return { ctx, changed: false };
 
     const originalOffset = ctx.offset;
+
     if (alt) {
         const { line, column } = ctx.code.getPosition(ctx.offset);
         const s = ctx.code.line(line).slice(column);
@@ -475,7 +518,11 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
         const jump = match ? match[0].length : 1;
         ctx.offset += jump;
     } else {
-        ctx.offset += 1;
+        if (ctx.selection && !ctx.selection.isEmpty() && !ctx.event?.shiftKey) {
+            ctx.offset = ctx.selection.end;
+        } else {
+            ctx.offset += 1;
+        }
     }
     
     if (ctx.event?.shiftKey) {
@@ -487,7 +534,7 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
         }
     } else {
         if (ctx.selection) {
-            ctx.selection.reset(ctx.offset);
+            ctx.selection = undefined;
         }
     }
 
@@ -505,7 +552,11 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
         const jump = match ? match[0].length : 1;
         ctx.offset -= jump;
     } else {
-        ctx.offset -= 1;
+        if (ctx.selection && !ctx.selection.isEmpty() && !ctx.event?.shiftKey) {
+            ctx.offset = ctx.selection.start;
+        } else {
+            ctx.offset -= 1;
+        }
     }
     
     if (ctx.event?.shiftKey) {
@@ -517,7 +568,7 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
         }
     } else {
         if (ctx.selection) {
-            ctx.selection.reset(ctx.offset);
+            ctx.selection = undefined;
         }
     }
 

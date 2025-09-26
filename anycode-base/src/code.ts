@@ -739,7 +739,7 @@ export class Code {
         return result
     }
 
-    public getIndentationLevel(line: number): number {
+    public getIndentationLevel(line: number, column?: number): number {
         let indent = this.getIndent();
         if (!indent) return 0;
 
@@ -747,10 +747,13 @@ export class Code {
 
         // loop over lineText and count indent
         let indentation = 0;
+        let i = 0;
         for (let char of lineText) {
+            if (column !== undefined && i >= column) break;
             if (char === ' ') indentation++;
             else if (char === '\t') indentation += indent.width;
             else break;
+            i++;
         }
 
         let width = indent.width || 2;
@@ -767,6 +770,23 @@ export class Code {
             col++;
         }
         return true;
+    }
+
+    public prevIndentation(line: number, column: number): number {
+        let indent = this.getIndent();
+        if (!indent) return 0;
+
+        let iw = indent.width;
+        let il = this.getIndentationLevel(line, column);
+
+        if (indent.unit === '\t') {
+            return il-1;
+        }
+        if (indent.unit === ' ') {
+            return iw * (il-1);
+        }
+
+        return il-1;
     }
 
     public search(pattern: string): { line: number; column: number }[] {

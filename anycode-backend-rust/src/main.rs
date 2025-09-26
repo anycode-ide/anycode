@@ -177,7 +177,7 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::new("info"))
         .init();
 
-    let (state, mut diagnostics_channel/* , mut watch_rx */) = build_app_state();
+    let (state, mut diagnostics_channel) = build_app_state();
     let file2code = state.file2code.clone();
 
     let (layer, io) = SocketIo::builder().with_state(state).build_layer();
@@ -190,7 +190,6 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         while let Some(diagnostic_message) = diagnostics_channel.recv().await {
             // log2::debug!("diagnostic_message_json {}", diagnostic_message_json);
-
             let send_result = socket.emit("lsp:diagnostics", &diagnostic_message).await;
             match send_result {
                 Ok(_) => {},

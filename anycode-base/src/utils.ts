@@ -45,7 +45,7 @@ export function isCharacter(event: KeyboardEvent): boolean {
 
 const WORD_BREAK_CHARS = [
     ' ', '.', ',', '=', '+', '-', '[', '(', '{', ']', ')', '}',
-    '"', ':', '&', '?', '!', ';', '\t', '/', '<', '>', '\n', '\''
+    '"', ':', '&', '?', '!', ';', '\t', '/', '<', '>', '\n', '\'', '`'
 ];
 
 export function findNextWord(line: string, from: number): number {
@@ -109,7 +109,17 @@ export function objectHash(obj: any) {
 /**
  * Helper function to get indentation from a line
  */
-export function getIndentation(line: string): string {
-    const match = line.match(/^\s*/);
-    return match ? match[0] : '';
+/**
+ * Returns the indentation (whitespace) before a given column in the line.
+ * If column is not provided, returns indentation of the whole line.
+ * @param line The line of text
+ * @param column The column up to which to check for indentation (exclusive)
+ */
+export function getIndentation(line: string, column?: number): string {
+    const end = typeof column === "number" ? Math.min(column, line.length) : line.length;
+    let i = 0;
+    while (i < end && (line[i] === ' ' || line[i] === '\t')) {
+        i++;
+    }
+    return line.slice(0, i);
 }

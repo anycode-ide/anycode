@@ -905,6 +905,7 @@ export class AnycodeEditor {
                 case 'c': return Action.COPY;
                 case 'v': return Action.PASTE;
                 case 'x': return Action.CUT;
+                case 'd': return Action.DUPLICATE;
                 default: return null;
             }
         }

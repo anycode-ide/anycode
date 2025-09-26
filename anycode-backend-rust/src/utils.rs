@@ -3,17 +3,11 @@ use std::path::{Path, PathBuf};
 
 pub const DEFAULT_IGNORE_DIRS: &[&str] = &[
     // Version control and IDEs
-    ".git", ".idea", ".vscode", ".vim", ".netrwhist", ".vs",
-
-    // Build artifacts and output directories
-    "node_modules", "dist", "target", "build", "out", "bin", "obj",
+    ".git",
 
     // Python
     "__pycache__", ".pytest_cache", ".mypy_cache", ".tox",
     ".coverage", ".venv", "venv", "env",
-
-    // JavaScript/TypeScript
-    ".next", ".nuxt", ".output", "coverage", ".nyc_output",
 
     // Java
     ".gradle", ".m2", "classes",
@@ -24,20 +18,9 @@ pub const DEFAULT_IGNORE_DIRS: &[&str] = &[
     // Ruby
     ".bundle", "vendor",
 
-    // Go
-    "vendor",
 
     // System files
     ".DS_Store", "Thumbs.db", "desktop.ini",
-
-    // Temporary and cache files
-    "tmp", "temp", ".tmp", ".cache", "cache",
-
-    // Logs
-    "logs", "log",
-
-    // Documentation builds
-    "docs/_build", "site", "_site",
 
     // Cloud and DevOps
     ".terraform", ".terragrunt-cache", ".pulumi",
@@ -69,9 +52,6 @@ pub const DEFAULT_IGNORE_DIRS: &[&str] = &[
     ".ipynb_checkpoints", ".spyderproject", ".spyproject",
     ".RData", ".Rhistory", ".Rproj.user",
 
-    // Database files
-    "data", "db",
-
     // Web frameworks
     ".svelte-kit", ".routify", ".sapper",
     ".astro", ".solid", ".qwik",
@@ -81,10 +61,6 @@ pub const DEFAULT_IGNORE_DIRS: &[&str] = &[
 
     // Tool caches
     ".eslintcache", ".stylelintcache",
-
-    // Backup files
-    ".backup", "backup", "backups",
-
 ];
 
 pub const DEFAULT_IGNORE_FILES: &[&str] = &[
@@ -116,15 +92,6 @@ pub const DEFAULT_IGNORE_FILES: &[&str] = &[
     ".travis.yml", ".gitlab-ci.yml", "appveyor.yml",
     "azure-pipelines.yml", "buildspec.yml",
 
-    // Temporary and backup files
-    "*.tmp", "*.swp", "*.swo", "*.bak", "*.orig", "*~",
-
-    // Log files
-    "*.log",
-
-    // Database files
-    "*.db", "*.sqlite", "*.sqlite3",
-
     // Certificate and key files
     "*.pem", "*.key", "*.crt", "*.p12",
 
@@ -136,9 +103,6 @@ pub const DEFAULT_IGNORE_FILES: &[&str] = &[
 
     // Archives
     "*.zip", "*.tar", "*.gz", "*.bz2", "*.xz", "*.7z",
-
-    // Specific files
-    "coder.rs",
 ];
 
 
