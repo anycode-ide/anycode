@@ -1,6 +1,6 @@
 :root {
     --toolbar-height: 25px;
-    --toolbar-bottom-margin: 5px;
+    --toolbar-bottom-margin: 10px;
     --toolbar-total-space: calc(var(--toolbar-height) + var(--toolbar-bottom-margin) + 16px);
     --floating-terminal-height: 0px;
 }
@@ -358,10 +358,8 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: linear-gradient(to bottom, transparent, #555, transparent);
-} 
-
-
+    background: rgba(85, 85, 85, 0.21);
+}
 
 .file-system-content {
     padding: 1px 4px 4px 4px;

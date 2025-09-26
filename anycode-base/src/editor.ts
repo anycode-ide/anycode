@@ -347,27 +347,19 @@ export class AnycodeEditor {
 
         const codeFragment = document.createDocumentFragment();
         codeFragment.appendChild(this.createSpacer(paddingTop));
-
-        let maxLineWidth = this.maxLineWidth || 0;
         for (let i = startLine; i < endLine; i++) {
             const nodes = this.code.getLineNodes(i);
             const lineWrapper = this.createLineWrapper(i, nodes);
-            this.container.appendChild(lineWrapper);
-            const width = lineWrapper.scrollWidth;
-            this.container.removeChild(lineWrapper);
-            if (width > maxLineWidth) maxLineWidth = width;
             codeFragment.appendChild(lineWrapper);
         }
         codeFragment.appendChild(this.createSpacer(paddingBottom));
         this.codeContent.replaceChildren(codeFragment);
 
-        // const fullHeight = this.codeContent.scrollHeight;
-        // this.gutter.style.height = `${fullHeight}px`;
-        // this.buttonsColumn.style.height = `${fullHeight}px`;
-        // this.codeContent.style.height = `${fullHeight}px`;
-        // apply max line width collected during this render
-        this.maxLineWidth = maxLineWidth;
-        this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
+        const maxLineWidth = this.codeContent.scrollWidth;
+        if (maxLineWidth > this.maxLineWidth) {
+            this.maxLineWidth = maxLineWidth;
+            this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
+        }
         
         this.renderCursorOrSelection(false);
     }
@@ -451,9 +443,9 @@ export class AnycodeEditor {
     
             // measure line width
             this.container.appendChild(lineEl);
-            const width = lineEl.scrollWidth;
+            // const width = lineEl.scrollWidth;
             this.container.removeChild(lineEl);
-            if (width > maxLineWidth) maxLineWidth = width;
+            // if (width > maxLineWidth) maxLineWidth = width;
     
             this.codeContent.insertBefore(lineEl, this.codeContent.children[1]);
             this.gutter.insertBefore(this.createLineNumber(currentStartLine), this.gutter.children[1]);
@@ -469,9 +461,9 @@ export class AnycodeEditor {
     
             // measure line width
             this.container.appendChild(lineEl);
-            const width = lineEl.scrollWidth;
+            // const width = lineEl.scrollWidth;
             this.container.removeChild(lineEl);
-            if (width > maxLineWidth) maxLineWidth = width;
+            // if (width > maxLineWidth) maxLineWidth = width;
     
             this.codeContent.insertBefore(lineEl, bottomSpacer);
             this.gutter.insertBefore(this.createLineNumber(currentEndLine), gutterBottomSpacer);
@@ -482,8 +474,8 @@ export class AnycodeEditor {
         }
     
         // update global max line width
-        this.maxLineWidth = maxLineWidth;
-        this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
+        // this.maxLineWidth = maxLineWidth;
+        // this.codeContent.style.minWidth = `${this.maxLineWidth}px`;
     
         if (!changed) return;
     
