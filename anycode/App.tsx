@@ -7,7 +7,6 @@ import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } 
 import { DEFAULT_FILE, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
 import './App.css';
 
-
 const App: React.FC = () => {
     console.log('App rendered');
     
@@ -17,7 +16,6 @@ const App: React.FC = () => {
     const [dirtyFlags, setDirtyFlags] = useState<Map<string, boolean>>(new Map());
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [editorStates, setEditorStates] = useState<Map<string, AnycodeEditor>>(new Map());
-    const [editingFileName, setEditingFileName] = useState<string | null>(null);
     const activeFile = files.find(f => f.id === activeFileId);
     const lengthSpanRef = useRef<HTMLSpanElement>(null);
     
@@ -30,14 +28,12 @@ const App: React.FC = () => {
     const [debugMode, setDebugMode] = useState<boolean>(false);
     const [terminalVisible, setTerminalVisible] = useState<boolean>(false);
     
-    // Terminal state
     const terminalNameRef = useRef<string>('terminal');
     const terminalSessionRef = useRef<string>('anycode');
     const terminalColsRef = useRef<number>(60);
     const terminalRowsRef = useRef<number>(20);
     const terminalMessageHandlerRef = useRef<((data: string) => void) | null>(null);
     
-    // WebSocket connection
     const wsRef = useRef<Socket | null>(null);
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttemptsRef = useRef<number>(0);
@@ -45,14 +41,14 @@ const App: React.FC = () => {
 
     const handleLeftPanelVisibleChange = (index: number, visible: boolean) => {
         console.log('handleLeftPanelVisibleChange', index, visible);
-        if (index === 0) { // Left panel is at index 0
+        if (index === 0) {
             setLeftPanelVisible(visible);
         }
     };
 
     const handleTerminalPanelVisibleChange = (index: number, visible: boolean) => {
         console.log('handleTerminalPanelVisibleChange', index, visible);
-        if (index === 1) { // Terminal panel is at index 1
+        if (index === 1) {
             setTerminalVisible(visible);
         }
     };
@@ -103,8 +99,8 @@ const App: React.FC = () => {
                     saveFile(activeFileId);
                 }
             }
-            if (e.metaKey && e.key === "1") setLeftPanelVisible(prev => !prev)
-            if (e.metaKey && e.key === "2") setTerminalVisible(prev => !prev)
+            if (e.ctrlKey && e.key === "1") setLeftPanelVisible(prev => !prev)
+            if (e.ctrlKey && e.key === "2") setTerminalVisible(prev => !prev)
         };
 
         document.addEventListener('keydown', handleKeyDown);
@@ -193,25 +189,6 @@ const App: React.FC = () => {
         }
     };
 
-    const createNewFile = async () => {
-        try {
-            let id = Date.now().toString();
-            const newFile: FileState = {
-                id: `newfile-${id}`, name: `Untitled-${id}`, language: 'javascript', content: '',
-            };
-            
-            // just add new file - useEffect will create editor for it
-            setFiles(prev => [...prev, newFile]);
-            setActiveFileId(newFile.id);
-            
-            // initialize refs for new file
-            fileContentsRef.current.set(newFile.id, newFile.content);
-            dirtyFlagsRef.current.set(newFile.id, false);
-        } catch (error) {
-            console.error('Error creating new file:', error);
-        }
-    };
-
     const closeFile = (fileId: string) => {
         // find file before deleting to unselect it in the tree
         const fileToClose = files.find(f => f.id === fileId);
@@ -285,33 +262,13 @@ const App: React.FC = () => {
         }
     };
 
-    const renameFile = (fileId: string, newName: string) => {
-        setFiles(prev => prev.map(file => 
-            file.id === fileId  ? { ...file, name: newName } : file
-        ));
-        setEditingFileName(null);
-    };
-
-    const startEditingFileName = (fileId: string) => {
-        setEditingFileName(fileId);
-    };
-
-    const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, fileId: string) => {
-        if (e.key === 'Enter') {
-            renameFile(fileId, e.currentTarget.value);
-        } else if (e.key === 'Escape') {
-            setEditingFileName(null);
-        }
-    };
-
-    // WebSocket connection management
     const attemptReconnect = () => {
         reconnectAttemptsRef.current++;
         console.log(`Attempting to reconnect... (${reconnectAttemptsRef.current} attempts)`);
         
         reconnectTimeoutRef.current = setTimeout(() => {
             connectToBackend();
-        }, reconnectDelay); // Fixed delay
+        }, reconnectDelay);
     };
 
     const connectToBackend = () => {
@@ -329,13 +286,9 @@ const App: React.FC = () => {
                 console.log('Connected to backend');
                 setIsConnected(true);
                 setConnectionError(null);
-                // Reset reconnect attempts on successful connection
                 reconnectAttemptsRef.current = 0;
-
-                // Load root directory
                 openFolder('.');
 
-                // Initialize terminal
                 if (terminalVisible) {
                     console.log('App: Initializing terminal after WebSocket connection');
                     ws.emit('terminal:start', { 
@@ -345,31 +298,25 @@ const App: React.FC = () => {
                     console.log('App: Terminal not visible, skipping initialization');
                 }
             });
-
             ws.on('disconnect', (reason) => {
                 console.log('Disconnected from backend', reason);
                 setIsConnected(false);
                 attemptReconnect();
             });
-
             ws.on('connect_error', (error) => {
                 console.error('Socket connect error:', error);
                 setIsConnected(false);
                 setConnectionError('Failed to connect to backend');
             });
-
-            // message handlers
             ws.on('error', (data) => {
                 console.error('Backend error:', data);
                 setConnectionError(data.message);
             });
-
             ws.on('terminal:data:' + terminalNameRef.current, (data: string) => {
                 if (terminalMessageHandlerRef.current) {
                     terminalMessageHandlerRef.current(data);
                 }
             });
-
         } catch (error) {
             console.error('Failed to connect to backend:', error);
             setConnectionError('Failed to connect to backend');
@@ -377,15 +324,11 @@ const App: React.FC = () => {
     };
 
     const disconnectFromBackend = () => {
-        // Clear reconnect timeout
         if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = null;
         }
-        
-        // Reset reconnect attempts
         reconnectAttemptsRef.current = 0;
-        
         if (wsRef.current) {
             wsRef.current.disconnect();
             wsRef.current = null;
@@ -432,7 +375,6 @@ const App: React.FC = () => {
     const handleOpenFolderResponse = (response: any) => {
         if (response.error) {
             console.error('Failed to open folder:', response.error);
-            // Handle error - could show a notification or alert
             return;
         }
         
@@ -484,24 +426,20 @@ const App: React.FC = () => {
         console.log('Opening file:', path);
         console.log('Current files:', files.map(f => ({ id: f.id, name: f.name })));
         
-        // check if file is already open
         const existingFile = files.find(file => file.id === path);
         
         if (existingFile) {
             console.log('File already open, switching to:', existingFile.name);
-            // if file is already open, switch to it
             setActiveFileId(existingFile.id);
             return;
         }
                 
-        // if file is not open, request its content with ack
         if (wsRef.current && isConnected) {
             wsRef.current.emit('openfile', { path }, (response: any) => { 
                 if (response.success) {
                     handleOpenFileResponse(path, response.content) 
                 } else {
                     console.error('Failed to open file:', response.error);
-                    // Handle error - could show a notification or alert
                 }
             });
         }
@@ -522,7 +460,6 @@ const App: React.FC = () => {
         return LANGUAGE_EXTENSIONS[ext || ''] || 'javascript';
     };
 
-    // Tree functions
     const convertToTree = (files: string[], dirs: string[], basePath: string): TreeNode[] => {
         const treeNodes: TreeNode[] = [];
         
@@ -754,18 +691,7 @@ const App: React.FC = () => {
                             onClick={() => setActiveFileId(file.id)}
                         >
                             <span className={`tab-dirty-indicator ${dirtyFlags.get(file.id) ? 'dirty' : ''}`}> ● </span>
-                            {editingFileName === file.id ? (
-                                <input
-                                    className="tab-rename-input"
-                                    type="text"
-                                    defaultValue={file.name}
-                                    onBlur={(e) => renameFile(file.id, e.target.value)}
-                                    onKeyDown={(e) => handleRenameKeyDown(e, file.id)}
-                                    autoFocus
-                                />
-                            ) : (
-                                <span className="tab-filename" onDoubleClick={() => startEditingFileName(file.id)} > {file.name} </span>
-                            )}
+                            <span className="tab-filename"> {file.name} </span>
                             <button className="tab-close-button" 
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -774,9 +700,7 @@ const App: React.FC = () => {
                             > × </button>
 
                         </div>
-                    ))}
-                    <button className="new-file-button" onClick={() => createNewFile()} title="New File">+</button>
-                    
+                    ))}                    
                 </div>
 
                 <span className="language-indicator">{activeFile?.language.toUpperCase()}</span>

@@ -24,7 +24,8 @@ function hello() {
 };
 
 // Backend connection settings
-export const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:3001`;
+const port = "3000"
+export const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:${port}`;
 
 // Default panel sizes
 export const DEFAULT_LEFT_PANEL_SIZE = 30;

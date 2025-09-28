@@ -111,18 +111,18 @@ async fn handle_watch_event(
     
     match event.kind {
         notify::EventKind::Create(_) => {
-            socket.emit( "watcher:create", &(path, path.is_file())).await;
+            let _ = socket.emit("watcher:create", &(path, path.is_file())).await;
         },
         notify::EventKind::Remove(_) => {
-            socket.emit("watcher:remove", &(path, path.is_file())).await; 
+            let _ = socket.emit("watcher:remove", &(path, path.is_file())).await; 
         },
         notify::EventKind::Modify(notify::event::ModifyKind::Data(_)) => {
-            socket.emit("watcher:modify", &(path, path.is_file())).await; 
+            let _ = socket.emit("watcher:modify", &(path, path.is_file())).await; 
 
             let mut f2c = file2code.lock().await;
             match f2c.get_mut(path.to_str().unwrap()) {
                 Some(file) => {
-                    file.reload();
+                    let _ = file.reload();
                 },
                 None => {},
             };

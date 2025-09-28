@@ -276,7 +276,6 @@ export const handleDuplicate = async (ctx: ActionContext): Promise<ActionResult>
     ctx.code.insert(textToDuplicate, insertPos);
     ctx.code.commit();
 
-    // Move cursor to the start of the duplicated text
     ctx.offset = newOffset;
     ctx.selection = undefined;
 

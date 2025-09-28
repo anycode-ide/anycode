@@ -41,9 +41,10 @@
 }
 
 .tab.active {
-    background-color: rgba(105, 98, 98, 0.33);    color: #fff;
+    background-color: rgba(105, 98, 98, 0.33);
+    color: #fff;
     border-radius: 12px;
-    border: 1px solid rgb(70, 70, 70);
+    /* border: 1px solid rgb(70, 70, 70); */
 }
 .tab:hover {
     /* background: rgba(255, 255, 255, 0.2); */

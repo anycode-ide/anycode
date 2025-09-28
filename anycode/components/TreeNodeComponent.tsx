@@ -58,7 +58,7 @@ export const TreeNodeComponent: React.FC<TreeNodeComponentProps> = ({
                 
                 <div 
                     className={`tree-toggle ${hasChildren ? (isExpanded ? 'expanded' : 'collapsed') : 'leaf'}`}
-                    onClick={handleToggle}
+                    // onClick={handleToggle}
                 >
                     {hasChildren ? '▶' : ''}
                 </div>
