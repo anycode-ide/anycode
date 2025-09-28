@@ -38,6 +38,7 @@
     /* border-right: 1px solid #444; */
     /* min-width: 120px; */
     position: relative;
+    white-space: nowrap;
 }
 
 .tab.active {
