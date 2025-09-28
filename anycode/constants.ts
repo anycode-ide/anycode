@@ -7,11 +7,15 @@ export const DEFAULT_FILE: FileState = {
     content: `// Welcome to Anycode Editor!
 
 // This is a default file created for you. You can:
-
-// - Create new files using the "+" button
 // - Open files from the file tree on the left  
 // - Edit files in the main editor area
-// - Save changes using the 💾 button
+// - undo changes with meta + z, redo meta + shift + z 
+// - copy/paste meta + c/ meta + v
+// - cut on meta + x, duplicate on meta + d
+// - comment line on meta + /
+// - Save changes using the meta + s button
+// - Open Files panel with contol + 1
+// - Open Terminal panel with contol + 2
 
 console.log('Happy coding! 🚀');
 

@@ -21,7 +21,7 @@ const App: React.FC = () => {
     
     const [fileTree, setFileTree] = useState<TreeNode[]>([]);
     const [currentPath, setCurrentPath] = useState<string>('.');
-    const [isConnected, setIsConnected] = useState<boolean>(false);
+    const [isConnected, setIsConnected] = useState<boolean>(true);
     const [connectionError, setConnectionError] = useState<string | null>(null);
 
     const [leftPanelVisible, setLeftPanelVisible] = useState<boolean>(true);
@@ -599,7 +599,7 @@ const App: React.FC = () => {
                                 <div className="file-system-panel">
                                     <div className="file-system-content">
                                         {fileTree.length === 0 ? (
-                                            <p className="file-system-empty">No files or folders found</p>
+                                            <p className="file-system-empty"> </p>
                                         ) : (
                                             <div className="file-tree">
                                                 {fileTree.map(node => (
@@ -628,8 +628,8 @@ const App: React.FC = () => {
                                     ) : (
                                         <div className="no-editor">
                                             <div>
-                                                <h3>No file selected</h3>
-                                                <p>Select a file from the file tree to start editing</p>
+                                                {/* <h3>No file selected</h3> */}
+                                                {/* <p>Select a file from the file tree to start editing</p> */}
                                             </div>
                                         </div>
                                     )}

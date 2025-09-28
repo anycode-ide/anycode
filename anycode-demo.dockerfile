@@ -76,6 +76,6 @@ COPY . /develop
 WORKDIR /develop
 CMD ["/app/backend/anycode"]
 
-# docker build -f anycode.dockerfile -t anycode .
+# docker build -f anycode-demo.dockerfile -t anycode .
 # docker run -it --rm -p 3000:3000 anycode
 # docker run -it --rm -p 3000:3000 -v "$(pwd)":/develop anycode
