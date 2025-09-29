@@ -21,7 +21,8 @@ COPY anycode-react ./anycode-react/
 
 # Build frontend
 WORKDIR /app/anycode
-RUN pnpm run build
+ENV NODE_ENV=development
+RUN pnpm run build:dev
 
 # Stage 1b: Copy anycode-base langs
 FROM node:alpine AS anycode-base-builder
@@ -43,9 +44,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS anycode-backend-builder
 COPY --from=planner /app/backend/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
-# Copying source code (applying changes after dependency caching)
 COPY anycode-backend-rust ./
-# Copy dist folder for rust-embed
 COPY --from=anycode-frontend-builder /app/anycode/dist ./dist
 RUN cargo build --release
 
@@ -77,6 +76,6 @@ WORKDIR /develop
 CMD ["/app/backend/anycode"]
 
 # docker build -f anycode-demo.dockerfile -t anycode-demo .
-# docker run -p 3000:3000 anycode-demo
+# docker run -d -p 3000:3000 anycode-demo
 # docker run -it --rm -p 3000:3000 anycode-demo
 # docker run -it --rm -p 3000:3000 -v "$(pwd)":/develop anycode-demo

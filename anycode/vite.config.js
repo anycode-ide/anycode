@@ -7,5 +7,8 @@ export default defineConfig({
     extensions: [".ts", ".tsx", ".js", ".jsx"],
   },
   assetsInclude: ['**/*.wasm'],
-  hot: true
+  hot: true,
+  build: {
+    sourcemap: true,
+  }
 });
