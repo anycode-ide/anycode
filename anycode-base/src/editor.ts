@@ -68,7 +68,6 @@ export class AnycodeEditor {
         const theme = options.theme || vesper;
         const css = generateCssClasses(theme);
         addCssToDocument(css, 'anyeditor-theme');
-        
         this.createDomElements()
     }
     
@@ -862,7 +861,7 @@ export class AnycodeEditor {
     
     private async handleKeydown(event: KeyboardEvent) {
         console.log('keydown', event);
-        if (event.ctrlKey && event.key === " ") {
+        if (event.metaKey && event.key === " ") {
             event.preventDefault();
             this.toggleCompletion();
             return;

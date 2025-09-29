@@ -213,7 +213,7 @@ export const handleCopy = async (ctx: ActionContext): Promise<ActionResult> => {
         if (end > len) end = len; // todo: fix end bug
 
         let content = ctx.code.getIntervalContent2(start, end);
-        await navigator.clipboard.writeText(content);
+        await copyToClipboard(content);
         console.log('Copied:', content);
     } catch (err) {
         console.error('Failed to copy:', err);
@@ -221,6 +221,32 @@ export const handleCopy = async (ctx: ActionContext): Promise<ActionResult> => {
 
     return { ctx, changed: false };
 };
+
+async function copyToClipboard(textToCopy: string) {
+    // Navigator clipboard api needs a secure context (https)
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textToCopy);
+    } else {
+        // Use the 'out of viewport hidden text area' trick
+        const textArea = document.createElement("textarea");
+        textArea.value = textToCopy;
+            
+        // Move textarea out of the viewport so it's not visible
+        textArea.style.position = "absolute";
+        textArea.style.left = "-999999px";
+            
+        document.body.prepend(textArea);
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+        } catch (error) {
+            console.error(error);
+        } finally {
+            textArea.remove();
+        }
+    }
+}
 
 export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => {
     try {
