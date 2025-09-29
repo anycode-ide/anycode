@@ -368,7 +368,7 @@ const App: React.FC = () => {
 
     const openFolder = (path: string) => {
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('openfolder', { path }, handleOpenFolderResponse);
+            wsRef.current.emit('dir:list', { path }, handleOpenFolderResponse);
         }
     };
 
@@ -435,7 +435,7 @@ const App: React.FC = () => {
         }
                 
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('openfile', { path }, (response: any) => { 
+            wsRef.current.emit('file:open', { path }, (response: any) => { 
                 if (response.success) {
                     handleOpenFileResponse(path, response.content) 
                 } else {

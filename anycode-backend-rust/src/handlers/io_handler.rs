@@ -59,7 +59,7 @@ pub struct DirOpenRequest {
     pub path: String,
 }
 
-pub async fn handle_dir_open(
+pub async fn handle_dir_list(
     Data(request): Data<DirOpenRequest>,
     ack: AckSender,
     _state: State<AppState>

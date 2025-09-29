@@ -51,12 +51,12 @@ use notify::{recommended_watcher, Event, RecursiveMode, Watcher};
 async fn on_connect(socket: SocketRef, state: State<AppState>) {
     info!("Socket.IO connected: {:?} {:?}", socket.ns(), socket.id);
 
-    socket.on("openfile", handle_file_open);
-    socket.on("openfolder", handle_dir_open);
+    socket.on("file:open", handle_file_open);
+    socket.on("dir:list", handle_dir_list);
     socket.on("file:edit", handle_file_edit);
     socket.on("file:save", handle_file_save);
     socket.on("file:set", handle_file_set);
-    socket.on("create", handle_create);
+    socket.on("file:create", handle_create);
     socket.on("file:close", handle_file_close);
 
     socket.on("lsp:completion", handle_completion);
@@ -177,7 +177,7 @@ async fn main() -> Result<()> {
         .init();
 
     let (state, mut diagnostics_channel) = build_app_state();
-    let file2code = state.file2code.clone();
+    // let file2code = state.file2code.clone();
 
     let (layer, io) = SocketIo::builder().with_state(state).build_layer();
     let cors = ServiceBuilder::new().layer(CorsLayer::permissive()).layer(layer);
@@ -200,31 +200,31 @@ async fn main() -> Result<()> {
     });
 
 
-    let (watch_tx, mut watch_rx) = mpsc::channel::<notify::Result<Event>>(32);
-    let mut watcher = recommended_watcher(move |res| {
-        let _ = watch_tx.blocking_send(res);
-    })?;
+    // let (watch_tx, mut watch_rx) = mpsc::channel::<notify::Result<Event>>(32);
+    // let mut watcher = recommended_watcher(move |res| {
+    //     let _ = watch_tx.blocking_send(res);
+    // })?;
 
-    let dir = std::path::Path::new(".");
-    watcher.watch(dir, RecursiveMode::Recursive)?;
+    // let dir = std::path::Path::new(".");
+    // watcher.watch(dir, RecursiveMode::Recursive)?;
 
-    // Spawn a task to watch files and dirs changes and send events to the socket
-    let socket = io.clone();
-    tokio::spawn(async move {
-        while let Some(res) = watch_rx.recv().await {
-            match res {
-                Ok(event) => {
-                    for path in &event.paths {
-                        if is_ignored_dir(path) { continue }
-                        else { 
-                            handle_watch_event(path, &event, &socket, &file2code).await
-                        }
-                    }
-                },
-                Err(e) => eprintln!("watch error: {:?}", e)
-            }
-        }
-    });
+    // // Spawn a task to watch files and dirs changes and send events to the socket
+    // let socket = io.clone();
+    // tokio::spawn(async move {
+    //     while let Some(res) = watch_rx.recv().await {
+    //         match res {
+    //             Ok(event) => {
+    //                 for path in &event.paths {
+    //                     if is_ignored_dir(path) { continue }
+    //                     else { 
+    //                         handle_watch_event(path, &event, &socket, &file2code).await
+    //                     }
+    //                 }
+    //             },
+    //             Err(e) => eprintln!("watch error: {:?}", e)
+    //         }
+    //     }
+    // });
 
     io.ns("/", on_connect);
 
@@ -233,7 +233,7 @@ async fn main() -> Result<()> {
         .with_state(io.clone())
         .layer(cors);
 
-    let port = std::env::var("ANYCODE_PORT").unwrap_or("3001".to_string());
+    let port = std::env::var("ANYCODE_PORT").unwrap_or("3000".to_string());
     let url = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(url).await?;
 

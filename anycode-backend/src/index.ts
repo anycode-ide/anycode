@@ -5,7 +5,6 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import * as os from 'node:os';
 import * as pty from 'node-pty';
-import { DirectoryResponse, DirectoryErrorResponse } from './types';
 import fastifyStatic from '@fastify/static';
 
 const fastify = Fastify({ logger: true });
@@ -178,7 +177,7 @@ const handleTerminalInput = (socket: Socket, data: TerminalDataPayload) => {
 };
 
 const registerSocketHandlers = (socket: Socket) => {
-  socket.on('openfolder', async (data: OpenFolderPayload, ack: Function) => {
+  socket.on('dir:list', async (data: OpenFolderPayload, ack: Function) => {
     try {
       const dirPath = path.resolve(WORKSPACE_ROOT, data.path);
       if (!dirPath.startsWith(WORKSPACE_ROOT)) {
@@ -215,7 +214,7 @@ const registerSocketHandlers = (socket: Socket) => {
     }
   });
 
-  socket.on('openfile', async (data: OpenFilePayload, ack: Function) => {
+  socket.on('file:open', async (data: OpenFilePayload, ack: Function) => {
     try {
       const content = await getFileContent(data.path);
       if (ack) {
@@ -287,7 +286,7 @@ const handleSocketError = (socket: Socket, error: Error) => {
 
 const start = async () => {
   try {
-    const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+    const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
     await fastify.register(fastifyStatic, {
       root: path.join(__dirname, '../public/dist'),
