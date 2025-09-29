@@ -51,7 +51,6 @@ pub async fn handle_search(
         ).await;
 
         if let Err(err) = search_result {
-            eprintln!("Search failed: {}", err);
             let _ = socket_clone.emit("search:error", &json!({
                 "error": "Search failed", "message": err.to_string()
             }));
@@ -60,7 +59,6 @@ pub async fn handle_search(
 
     // Collect results and send them to the socket
     tokio::spawn(async move {
-
         let mut matches = 0;
         // In cancel case, the loop will be ended automatically
         while let Some(file_result) = result_rx.recv().await {

@@ -2,12 +2,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{self, json};
 use socketioxide::{extract::{AckSender, Data, State}};
 use tracing::{info, error};
-use crate::{
-    app_state::AppState, code::Code,
-};
-
-use lsp_types::{Hover, HoverContents};
-
+use crate::app_state::AppState;
+use crate::app_state::*;
+use crate::error_ack;
 use crate::utils::abs_file;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -25,25 +22,22 @@ pub async fn handle_completion(
     info!("handle_completion {:?}", request);
     let CompletionRequest { file, row, column } = request;
 
-    let file = match abs_file(&file) {
-        Ok(file) => file,
-        Err(e) => {
-            let message = format!("Failed to open file: {:?}", e);
-            error!("{}", message);
-            ack.send(&message);
-            return;
-        }
+    let abs_path = match abs_file(&file) {
+        Ok(p) => p,
+        Err(e) => error_ack!(ack, &file, "Failed to resolve file: {:?}", e),
     };
 
     let mut f2c = state.file2code.lock().await;
+    let code = match get_or_create_code(&mut f2c, &abs_path, &state.config) {
+        Ok(c) => c,
+        Err(e) => error_ack!(ack, &abs_path, "{:?}", e),
+    };
 
-    let code = f2c.entry(file.clone()).or_insert_with_key(|key| {
-        Code::from_file(key, &state.config).unwrap()
-    });
+    let mut lsp_manager = state.lsp_manager.lock().await;
 
-    let result = match state.lsp_manager.lock().await.get(&code.lang).await {
+    let result = match lsp_manager.get(&code.lang).await {
         Some(lsp) => {
-            lsp.completion(&file, row, column).await
+            lsp.completion(&abs_path, row, column).await
                 .ok().unwrap_or_else(|| Vec::new())
         },
         None => Vec::new()
@@ -66,32 +60,28 @@ pub async fn handle_hover(
     state: State<AppState>
 ) {
     info!("handle_completion {}", request.file);
-    let file = match abs_file(&request.file) {
-        Ok(file) => file,
-        Err(e) => {
-            let message = format!("Failed to open file: {:?}", e);
-            error!("{}", message);
-            ack.send(&message);
-            return;
-        }
+    let HoverRequest { file, row, column } = request;
+
+    let abs_path = match abs_file(&file) {
+        Ok(p) => p,
+        Err(e) => error_ack!(ack, &file, "Failed to resolve file: {:?}", e),
     };
 
     let mut f2c = state.file2code.lock().await;
-
-    let code = f2c.entry(request.file.clone()).or_insert_with_key(|key| {
-        Code::from_file(key, &state.config).unwrap()
-    });
-
-    use serde_json::json;
+    let code = match get_or_create_code(&mut f2c, &abs_path, &state.config) {
+        Ok(c) => c,
+        Err(e) => error_ack!(ack, &abs_path, "{:?}", e),
+    };
     
-    if let Some(lsp) = state.lsp_manager.lock().await.get(&code.lang).await {
-        match lsp.hover(&file, request.row, request.column).await {
+    let mut lsp_manager = state.lsp_manager.lock().await;
+
+    if let Some(lsp) = lsp_manager.get(&code.lang).await {
+        match lsp.hover(&abs_path, row, column).await {
             Ok(hover) => {
-                let _ = ack.send(&hover);
+                ack.send(&hover).ok();
             }
             Err(e) => {
-                let err_json = json!({ "error": format!("Hover request failed: {}", e) });
-                let _ = ack.send(&err_json);
+                ack.send(&json!({ "error": format!("Hover request failed: {}", e) })).ok();
             }
         }
     }
@@ -111,26 +101,24 @@ pub async fn handle_definition(
     state: State<AppState>
 ) {
     info!("handle_definition {}", request.file);
+    let DefinitionRequest { file, row, column } = request;
 
-    let file = match abs_file(&request.file) {
-        Ok(file) => file,
-        Err(e) => {
-            let message = format!("Failed to open file: {:?}", e);
-            error!("{}", message);
-            ack.send(&message);
-            return;
-        }
+    let abs_path = match abs_file(&file) {
+        Ok(p) => p,
+        Err(e) => error_ack!(ack, &file, "Failed to resolve file: {:?}", e),
     };
 
     let mut f2c = state.file2code.lock().await;
+    let code = match get_or_create_code(&mut f2c, &abs_path, &state.config) {
+        Ok(c) => c,
+        Err(e) => error_ack!(ack, &abs_path, "{:?}", e),
+    };
 
-    let code = f2c.entry(request.file.clone()).or_insert_with_key(|key| {
-        Code::from_file(key, &state.config).unwrap()
-    });
-
-    let result = match state.lsp_manager.lock().await.get(&code.lang).await {
+    let mut lsp_manager = state.lsp_manager.lock().await;
+    
+    let result = match lsp_manager.get(&code.lang).await {
         Some(lsp) => {
-            lsp.definition(&file, request.row, request.column).await
+            lsp.definition(&abs_path, row, column).await
                 .ok().unwrap_or_else(|| Vec::new())
         },
         None => Vec::new()
@@ -148,36 +136,31 @@ pub struct ReferencesRequest {
 }
 
 pub async fn handle_references(
-    Data(references_request): Data<ReferencesRequest>,
+    Data(request): Data<ReferencesRequest>,
     ack: AckSender,
     state: State<AppState>
 ) {
-    info!("handle_references {}", references_request.file);
+    info!("handle_references {}", request.file);
+    let ReferencesRequest { file, row, column } = request;
 
-    let file = match abs_file(&references_request.file) {
-        Ok(file) => file,
-        Err(e) => {
-            let message = format!("Failed to open file: {:?}", e);
-            error!("{}", message);
-            ack.send(&message);
-            return;
-        }
+    let abs_path = match abs_file(&file) {
+        Ok(p) => p,
+        Err(e) => error_ack!(ack, &file, "Failed to resolve file: {:?}", e),
     };
 
     let mut f2c = state.file2code.lock().await;
-
-    let code = f2c.entry(references_request.file.clone()).or_insert_with_key(|key| {
-        Code::from_file(key, &state.config).unwrap()
-    });
+    let code = match get_or_create_code(&mut f2c, &abs_path, &state.config) {
+        Ok(c) => c,
+        Err(e) => error_ack!(ack, &abs_path, "{:?}", e),
+    };
 
     let result = match state.lsp_manager.lock().await.get(&code.lang).await {
         Some(lsp) => {
-            lsp.references(&file, references_request.row, references_request.column).await
+            lsp.references(&abs_path, row, column).await
                 .ok().unwrap_or_else(|| Vec::new())
         },
         None => Vec::new()
     };
 
-    let result = json!({ "items": result });
-    ack.send(&result).ok();
+    ack.send(&json!({ "items": result })).ok();
 }
