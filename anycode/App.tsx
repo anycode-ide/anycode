@@ -157,6 +157,10 @@ const App: React.FC = () => {
 
     const handleFileChange = (filename: string, edit: Edit) => {
         console.log('handleFileChange', filename, edit);
+
+        if (wsRef.current && isConnected) {
+            wsRef.current.emit("file:edit", { file: filename, ...edit});
+        }
         
         const file = files.find(f => f.name === filename);
         if (!file) return;

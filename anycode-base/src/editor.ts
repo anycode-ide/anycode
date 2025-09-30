@@ -149,6 +149,9 @@ export class AnycodeEditor {
         
         this.handleKeydown = this.handleKeydown.bind(this);
         this.codeContent.addEventListener('keydown', this.handleKeydown);
+
+        this.handlePasteEvent = this.handlePasteEvent.bind(this);
+        this.codeContent.addEventListener('paste', this.handlePasteEvent);
         
         this.handleBeforeInput = this.handleBeforeInput.bind(this);
         this.container.addEventListener('beforeinput', this.handleBeforeInput);
@@ -173,6 +176,7 @@ export class AnycodeEditor {
         this.container.removeEventListener("scroll", this.handleScroll);
         this.codeContent.removeEventListener('click', this.handleClick);
         this.codeContent.removeEventListener('keydown', this.handleKeydown);
+        this.codeContent.removeEventListener('paste', this.handlePasteEvent);
         this.container.removeEventListener('beforeinput', this.handleBeforeInput);
         this.codeContent.removeEventListener('mousedown', this.handleMouseDown);
         this.container.removeEventListener('mouseup', this.handleMouseUp);
@@ -875,6 +879,12 @@ export class AnycodeEditor {
         const action = this.getActionFromKey(event);
         if (!action) return;
         
+        // Special-case paste in non-secure context: let native paste flow,
+        // which will be handled by the 'beforeinput' listener.
+        if (action === Action.PASTE && !(navigator.clipboard && window.isSecureContext)) {
+            return;
+        }
+
         event.preventDefault();
         
         const ctx: ActionContext = {
@@ -1013,6 +1023,38 @@ export class AnycodeEditor {
             const result = await executeAction(Action.TEXT_INPUT, ctx);
             this.applyEditResult(result);
         }
+    }
+    
+    private handlePasteEvent(e: ClipboardEvent) {
+        // In secure contexts, paste is handled via Action.PASTE using navigator.clipboard
+        if (navigator.clipboard && window.isSecureContext) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const pastedText = e.clipboardData?.getData('text/plain') ?? '';
+        if (!pastedText) return;
+
+        let insertOffset = this.offset;
+
+        this.code.tx();
+        if (this.selection && this.selection.nonEmpty()) {
+            const [start, end] = this.selection.sorted();
+            this.code.remove(start, end - start);
+            insertOffset = start;
+            this.selection = null;
+        }
+
+        this.code.insert(pastedText, insertOffset);
+        this.code.commit();
+
+        this.offset = insertOffset + pastedText.length;
+
+        this.maxLineWidth = 0;
+        this.renderChanges();
+        this.renderCursorOrSelection(true);
     }
     
     private async toggleCompletion() {
