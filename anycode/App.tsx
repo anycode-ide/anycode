@@ -244,7 +244,7 @@ const App: React.FC = () => {
         if (currentContent !== undefined) {
             // send file to backend with ack
             if (wsRef.current && isConnected) {
-                wsRef.current.emit('savefile', { path: fileId, content: currentContent }, handleSaveFileResponse);
+                wsRef.current.emit('file:save', { path: fileId }, handleSaveFileResponse);
             }
         }
     };

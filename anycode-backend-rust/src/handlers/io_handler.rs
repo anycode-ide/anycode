@@ -210,17 +210,22 @@ pub async fn handle_file_edit(
     socket.broadcast().emit("file:edit", &edit).await.ok();
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileSaveRequest {
+    pub path: String,
+}
+
 pub async fn handle_file_save(
     _socket: SocketRef,
-    Data(file): Data<String>,
+    Data(request): Data<FileSaveRequest>,
     state: State<AppState>,
     ack: AckSender,
 ) {
-    info!("Received file:save: {:?}", file);
+    info!("Received file:save: {:?}", request.path);
 
-    let abs_path = match abs_file(&file) {
+    let abs_path = match abs_file(&request.path) {
         Ok(p) => p,
-        Err(e) => error_ack!(ack, &file, "Failed to resolve file: {:?}", e),
+        Err(e) => error_ack!(ack, &request.path, "Failed to resolve file: {:?}", e),
     };
 
     let mut f2c = state.file2code.lock().await;

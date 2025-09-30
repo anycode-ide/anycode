@@ -227,7 +227,7 @@ const registerSocketHandlers = (socket: Socket) => {
     }
   });
 
-  socket.on('savefile', async (data: SaveFilePayload, ack: Function) => {
+  socket.on('file:save', async (data: SaveFilePayload, ack: Function) => {
     try {
       const fullPath = path.resolve(WORKSPACE_ROOT, data.path);
       if (!fullPath.startsWith(WORKSPACE_ROOT)) {
