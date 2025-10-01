@@ -232,7 +232,7 @@ export const handleCopy = async (ctx: ActionContext): Promise<ActionResult> => {
         console.error('Failed to copy:', err);
     }
 
-    return { ctx, changed: false };
+    return { ctx, changed: true };
 };
 
 async function copyToClipboard(textToCopy: string) {
