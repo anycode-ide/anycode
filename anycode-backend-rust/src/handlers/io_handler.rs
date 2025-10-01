@@ -178,26 +178,30 @@ pub async fn handle_file_edit(
 
     match edit.operation {
         0 /* insert */ => {
-            code.insert_text2(&edit.text, edit.start);
+            // incoming start is assumed to be UTF-16 code units from client
+            let start_char = code.utf16_to_char_offset(edit.start);
+            code.insert_text_at(&edit.text, start_char);
 
             if let Some(lsp) = lsp_manager.get(&code.lang).await {
-                let start_pos = code.position(edit.start);
+                let (line, col_utf16) = code.char_to_position(start_char);
                 lsp.did_change(
-                    start_pos.0, start_pos.1, start_pos.0, start_pos.1,
+                    line, col_utf16, line, col_utf16,
                     &abs_path, &edit.text
                 ).await;
             }
         }
         1 /* remove */ => {
-            let chars_count = edit.text.chars().count();
-            let start_pos = code.position(edit.start);
-            let end_pos = code.position(edit.start + chars_count);
+            // incoming start and text length are in UTF-16 units from client
+            let start_char = code.utf16_to_char_offset(edit.start);
+            let end_char = code.utf16_to_char_offset(edit.start + edit.text.encode_utf16().count());
 
-            code.remove_text2(edit.start, edit.start + chars_count);
+            code.remove_text2(start_char, end_char);
 
             if let Some(lsp) = lsp_manager.get(&code.lang).await {
+                let (start_line, start_col_utf16) = code.char_to_position(start_char);
+                let (end_line, end_col_utf16) = code.char_to_position(end_char);
                 lsp.did_change(
-                    start_pos.0, start_pos.1, end_pos.0, end_pos.1,
+                    start_line, start_col_utf16, end_line, end_col_utf16,
                     &abs_path, ""
                 ).await;
             }
@@ -343,7 +347,7 @@ pub async fn handle_create(
             Ok(_) => {
                 info!("File created successfully: {}", full_path);
                 let mut f2c = state.file2code.lock().await;
-                let code = f2c.entry(full_path.clone()).or_insert_with_key(|key| {
+                let code = f2c.entry(full_path.clone()).or_insert_with(|| {
                     Code::new()
                 });
                 code.set_file_name(full_path.clone());

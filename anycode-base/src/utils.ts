@@ -68,6 +68,83 @@ export function findPrevWord(line: string, from: number): number {
     return 0;
 }
 
+// Grapheme cluster helpers
+let _graphemeSegmenter: Intl.Segmenter | null = null;
+
+function getSegmenter(): Intl.Segmenter | null {
+    try {
+        if (typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
+            if (!_graphemeSegmenter) {
+                _graphemeSegmenter = new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' });
+            }
+            return _graphemeSegmenter;
+        }
+    } catch {
+        // ignore
+    }
+    return null;
+}
+
+export function getPrevGraphemeIndex(line: string, fromColumn: number): number {
+    if (fromColumn <= 0) return 0;
+    const seg = getSegmenter();
+    if (seg) {
+        const segments = (seg as any).segment(line);
+        let prev = 0;
+        for (const part of segments) {
+            const idx: number = part.index;
+            if (idx >= fromColumn) break;
+            prev = idx;
+        }
+        return prev;
+    }
+    // Fallback: iterate code points (won't perfectly handle ZWJ sequences)
+    let count = 0;
+    let lastIndex = 0;
+    for (const ch of line) {
+        const len = ch.length; // code units of this code point/grapheme
+        if (count + len >= fromColumn) break;
+        count += len;
+        lastIndex = count;
+    }
+    return lastIndex;
+}
+
+export function getNextGraphemeIndex(line: string, fromColumn: number): number {
+    if (fromColumn >= line.length) return line.length;
+    const seg = getSegmenter();
+    if (seg) {
+        const segments = (seg as any).segment(line);
+        let next = line.length;
+        let passed = false;
+        for (const part of segments) {
+            const idx: number = part.index;
+            if (!passed) {
+                if (idx === fromColumn) {
+                    passed = true;
+                } else if (idx > fromColumn) {
+                    // we were in the middle of a cluster, go to this boundary
+                    return idx;
+                }
+                continue;
+            } else {
+                next = idx;
+                break;
+            }
+        }
+        return next;
+    }
+    // Fallback: step by a single code point
+    let count = 0;
+    for (const ch of line) {
+        const len = ch.length;
+        if (count === fromColumn) return count + len;
+        count += len;
+        if (count > fromColumn) return count; // inside code point
+    }
+    return line.length;
+}
+
 export function minimize(str: string, maxLength:number = 100): string {
     const newlineIndex = str.indexOf('\n');
     let result = str;

@@ -136,6 +136,22 @@ impl Code {
         (line_idx, offset - line_char_index)
     }
 
+    pub fn utf16_to_char_offset(&self, utf16_offset: usize) -> usize {
+        self.text.utf16_cu_to_char(utf16_offset)
+    }
+
+    pub fn char_to_utf16_offset(&self, char_offset: usize) -> usize {
+        self.text.char_to_utf16_cu(char_offset)
+    }
+
+    pub fn char_to_position(&self, char_offset: usize) -> (usize, usize) {
+        let line_idx = self.text.char_to_line(char_offset);
+        let line_char_start = self.text.line_to_char(line_idx);
+        let abs_utf16_cu_at_pos = self.text.char_to_utf16_cu(char_offset);
+        let abs_utf16_cu_at_line = self.text.char_to_utf16_cu(line_char_start);
+        (line_idx, abs_utf16_cu_at_pos - abs_utf16_cu_at_line)
+    }
+
     fn insert(&mut self, text: &str, from: usize) {
         self.text.insert(from, text);
         self.changed = true;
@@ -156,7 +172,7 @@ impl Code {
         self.redo_history.clear();
     }
 
-    pub fn insert_text2(&mut self, text: &str, offset: usize) {
+    pub fn insert_text_at(&mut self, text: &str, offset: usize) {
         self.insert(text, offset);
 
         self.undo_history.push(Change {

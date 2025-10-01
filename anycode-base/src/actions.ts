@@ -1,6 +1,6 @@
 import type { Code } from "./code";
 import { Selection } from "./selection";
-import { getIndentation } from "./utils";
+import { getIndentation, getPrevGraphemeIndex, getNextGraphemeIndex } from "./utils";
 
 export enum Action {
     // Navigation
@@ -118,6 +118,14 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
 
     let { line, column } = ctx.code.getPosition(ctx.offset);
 
+    // At start of line: join with previous line by removing the newline
+    if (column === 0 && line > 0) {
+        ctx.offset -= 1;
+        ctx.code.remove(ctx.offset, 1);
+        ctx.code.commit();
+        return { ctx, changed: true };
+    }
+
     let isRemoveIndent = column > 0 && ctx.code.getIndent() &&
         ctx.code.isOnlyIndentationBefore(line, column);
 
@@ -130,8 +138,13 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
         ctx.code.remove(start, ctx.offset - start);
         ctx.offset = start;
     } else {
-        ctx.offset -= 1;
-        ctx.code.remove(ctx.offset, 1);
+        // delete previous grapheme cluster
+        const { line, column } = ctx.code.getPosition(ctx.offset);
+        const lineText = ctx.code.line(line);
+        const prevCol = getPrevGraphemeIndex(lineText, column);
+        const removeLen = column - prevCol;
+        ctx.offset -= removeLen;
+        ctx.code.remove(ctx.offset, removeLen);
     }
 
     ctx.code.commit();
@@ -538,15 +551,46 @@ export const moveArrowRight = (ctx: ActionContext, alt: boolean): ActionResult =
 
     if (alt) {
         const { line, column } = ctx.code.getPosition(ctx.offset);
-        const s = ctx.code.line(line).slice(column);
+        const lineTextAll = ctx.code.line(line);
+        const s = lineTextAll.slice(column);
         const match = s.match(/^[ \t]*\w+/);
         const jump = match ? match[0].length : 1;
-        ctx.offset += jump;
+        // advance by grapheme clusters equal to jump
+        const lineText = lineTextAll;
+        let col = column;
+        for (let i = 0; i < jump; i++) {
+            const nextCol = getNextGraphemeIndex(lineText, col);
+            if (nextCol === col) { col++; } else { col = nextCol; }
+        }
+        if (col >= lineText.length) {
+            // At end of line, jump to next line start if exists
+            if (line + 1 < ctx.code.linesLength()) {
+                ctx.offset = ctx.code.getOffset(line + 1, 0);
+            } else {
+                ctx.offset = ctx.code.getOffset(line, lineText.length);
+            }
+        } else {
+            const newOffset = ctx.code.getOffset(line, col);
+            ctx.offset = newOffset;
+        }
     } else {
         if (ctx.selection && !ctx.selection.isEmpty() && !ctx.event?.shiftKey) {
             ctx.offset = ctx.selection.end;
         } else {
-            ctx.offset += 1;
+            const { line, column } = ctx.code.getPosition(ctx.offset);
+            const lineText = ctx.code.line(line);
+            if (column >= lineText.length) {
+                // at end of line -> go to start of next line if available
+                if (line + 1 < ctx.code.linesLength()) {
+                    ctx.offset = ctx.code.getOffset(line + 1, 0);
+                } else {
+                    // already at end of buffer
+                    return { ctx, changed: false };
+                }
+            } else {
+                const nextCol = getNextGraphemeIndex(lineText, column);
+                ctx.offset = ctx.code.getOffset(line, nextCol);
+            }
         }
     }
     
@@ -575,12 +619,30 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
         const s = ctx.code.line(line).slice(0, column);
         const match = s.match(/\w+[ \t]*$/);
         const jump = match ? match[0].length : 1;
-        ctx.offset -= jump;
+        // move left by grapheme clusters equal to jump
+        const lineText = ctx.code.line(line);
+        let col = column;
+        for (let i = 0; i < jump; i++) {
+            const prevCol = getPrevGraphemeIndex(lineText, col);
+            if (prevCol === col) { col--; } else { col = prevCol; }
+            if (col <= 0) { col = 0; break; }
+        }
+        const newOffset = ctx.code.getOffset(line, col);
+        ctx.offset = newOffset;
     } else {
         if (ctx.selection && !ctx.selection.isEmpty() && !ctx.event?.shiftKey) {
             ctx.offset = ctx.selection.start;
         } else {
-            ctx.offset -= 1;
+            const { line, column } = ctx.code.getPosition(ctx.offset);
+            if (column === 0 && line > 0) {
+                // move to end of previous line
+                const prevLineLen = ctx.code.line(line - 1).length;
+                ctx.offset = ctx.code.getOffset(line - 1, prevLineLen);
+            } else {
+                const lineText = ctx.code.line(line);
+                const prevCol = getPrevGraphemeIndex(lineText, column);
+                ctx.offset = ctx.code.getOffset(line, prevCol);
+            }
         }
     }
     
