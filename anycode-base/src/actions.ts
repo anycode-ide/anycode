@@ -332,7 +332,7 @@ export const handleCut = async (ctx: ActionContext): Promise<ActionResult> => {
         if (end > len) end = len; // todo: fix end bug
 
         let content = ctx.code.getIntervalContent2(start, end);
-        await navigator.clipboard.writeText(content);
+        await copyToClipboard(content);
         console.log('Cut:', content);
 
         ctx.code.tx();
