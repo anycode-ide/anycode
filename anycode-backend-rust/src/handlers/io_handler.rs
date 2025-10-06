@@ -180,10 +180,10 @@ pub async fn handle_file_edit(
         0 /* insert */ => {
             // incoming start is assumed to be UTF-16 code units from client
             let start_char = code.utf16_to_char_offset(edit.start);
+            let (line, col_utf16) = code.char_to_position(start_char);
             code.insert_text_at(&edit.text, start_char);
 
             if let Some(lsp) = lsp_manager.get(&code.lang).await {
-                let (line, col_utf16) = code.char_to_position(start_char);
                 lsp.did_change(
                     line, col_utf16, line, col_utf16,
                     &abs_path, &edit.text
@@ -194,12 +194,12 @@ pub async fn handle_file_edit(
             // incoming start and text length are in UTF-16 units from client
             let start_char = code.utf16_to_char_offset(edit.start);
             let end_char = code.utf16_to_char_offset(edit.start + edit.text.encode_utf16().count());
-
+            let (start_line, start_col_utf16) = code.char_to_position(start_char);
+            let (end_line, end_col_utf16) = code.char_to_position(end_char);
+            
             code.remove_text2(start_char, end_char);
 
             if let Some(lsp) = lsp_manager.get(&code.lang).await {
-                let (start_line, start_col_utf16) = code.char_to_position(start_char);
-                let (end_line, end_col_utf16) = code.char_to_position(end_char);
                 lsp.did_change(
                     start_line, start_col_utf16, end_line, end_col_utf16,
                     &abs_path, ""

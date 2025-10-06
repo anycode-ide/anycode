@@ -6,16 +6,20 @@ import 'allotment/dist/style.css';
 import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } from './components';
 import { DEFAULT_FILE, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
 import './App.css';
+import { Completion, CompletionRequest, Diagnostic, DiagnosticResponse } from '../anycode-base/src/lsp';
 
 const App: React.FC = () => {
     console.log('App rendered');
     
     const [files, setFiles] = useState<FileState[]>([]);
+    const filesRef = useRef<FileState[]>([]);
     const fileContentsRef = useRef<Map<string, string>>(new Map());
     const dirtyFlagsRef = useRef<Map<string, boolean>>(new Map());
     const [dirtyFlags, setDirtyFlags] = useState<Map<string, boolean>>(new Map());
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
     const [editorStates, setEditorStates] = useState<Map<string, AnycodeEditor>>(new Map());
+    const editorRefs = useRef<Map<string, AnycodeEditor>>(new Map());
+    const diagnosticsRef = useRef<Map<string, Diagnostic[]>>(new Map());
     const activeFile = files.find(f => f.id === activeFileId);
     const lengthSpanRef = useRef<HTMLSpanElement>(null);
     
@@ -39,6 +43,13 @@ const App: React.FC = () => {
     const reconnectAttemptsRef = useRef<number>(0);
     const reconnectDelay = 1000; // 1 second
 
+    // Keep latest files in a ref to avoid stale closures in socket handlers
+    useEffect(() => {
+        filesRef.current = files;
+    }, [files]);
+
+    // (diagnosticsState) no longer used: we apply diagnostics directly via editorRefs
+
     const handleLeftPanelVisibleChange = (index: number, visible: boolean) => {
         console.log('handleLeftPanelVisibleChange', index, visible);
         if (index === 0) {
@@ -56,9 +67,16 @@ const App: React.FC = () => {
     const createEditor = async (
         content: string, language: string, filename: string
     ): Promise<AnycodeEditor> => {
-        const editor = new AnycodeEditor(content, { language });
+        const editor = new AnycodeEditor(content, filename, { language });
         await editor.init();
         editor.setOnEdit((edit: Edit) => handleFileChange(filename, edit));
+        editor.setCompletionProvider(handleCompletion);
+        // Apply pending diagnostics for this file if any
+        const pendingDiagnostics = diagnosticsRef.current.get(filename);
+        if (pendingDiagnostics && pendingDiagnostics.length > 0) {
+            const errors = pendingDiagnostics.map(d => ({ line: d.range.start.line, message: d.message }));
+            editor.setErrors(errors);
+        }
         return editor;
     };
 
@@ -70,12 +88,15 @@ const App: React.FC = () => {
                 for (const file of files) {
                     if (!editorStates.has(file.id)) {
                         // create editor if it doesn't exist
-                        const editor = await createEditor(file.content, file.language, file.name);
+                        const editor = await createEditor(file.content, file.language, file.id);
                         newEditorStates.set(file.id, editor);
                         fileContentsRef.current.set(file.id, file.content);
+                        editorRefs.current.set(file.id, editor);
                     } else {
                         // if editor already exists, just use it
-                        newEditorStates.set(file.id, editorStates.get(file.id)!);
+                        const existing = editorStates.get(file.id)!;
+                        newEditorStates.set(file.id, existing);
+                        editorRefs.current.set(file.id, existing);
                     }
                 }
                 setEditorStates(newEditorStates);
@@ -212,6 +233,7 @@ const App: React.FC = () => {
             newStates.delete(fileId);
             return newStates;
         });
+        editorRefs.current.delete(fileId);
         
         fileContentsRef.current.delete(fileId);
         dirtyFlagsRef.current.delete(fileId);
@@ -321,9 +343,42 @@ const App: React.FC = () => {
                     terminalMessageHandlerRef.current(data);
                 }
             });
+            ws.on("lsp:diagnostics", handleDiagnostics);
         } catch (error) {
             console.error('Failed to connect to backend:', error);
             setConnectionError('Failed to connect to backend');
+        }
+    };
+
+    const handleDiagnostics = (diagnosticsResponse: DiagnosticResponse) => {
+        console.log("lsp:diagnostics", diagnosticsResponse);
+        // Store per-file diagnostics and update editor visuals if editor exists
+        const uri = diagnosticsResponse.uri || '';
+        const diags = diagnosticsResponse.diagnostics || [];
+
+        // Try to map URI to an opened file id (relative path). Use suffix match.
+        let targetFileId: string | null = null;
+        const openFiles = filesRef.current || [];
+        for (const f of openFiles) {
+            if (uri.endsWith('/' + f.id) || uri.endsWith(f.id) || uri.includes(f.id)) {
+                targetFileId = f.id;
+                break;
+            }
+        }
+
+        if (!targetFileId) {
+            // If file is not open yet, try to derive a relative id from uri by stripping file:// and cwd prefix
+            // Fallback: leave as-is; we will match later when the file opens
+            targetFileId = uri.replace('file://', '');
+        }
+
+        diagnosticsRef.current.set(targetFileId, diags);
+
+        // Apply immediately to editor via stable refs to avoid React re-render
+        const editorImmediate = editorRefs.current.get(targetFileId!);
+        if (editorImmediate) {
+            const errorsImmediate = diags.map(d => ({ line: d.range.start.line, message: d.message }));
+            editorImmediate.setErrors(errorsImmediate);
         }
     };
 
@@ -544,6 +599,24 @@ const App: React.FC = () => {
                 });
             };
             return updateNode(prevTree);
+        });
+    };
+
+    const handleCompletion = (completionRequest: CompletionRequest): Promise<Completion[]> => {
+        return new Promise((resolve, reject) => {
+            console.log('handleCompletion', completionRequest);
+        
+            wsRef.current?.emit("lsp:completion", completionRequest, (response:any) => {
+                console.log("lsp response", response);
+
+                if (response.error) {
+                    console.error('Failed to get completion:', response.error);
+                    reject([]);
+                    return;
+                }
+
+                resolve(response || []);
+            });
         });
     };
 

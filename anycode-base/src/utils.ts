@@ -49,7 +49,11 @@ const WORD_BREAK_CHARS = [
 ];
 
 export function findNextWord(line: string, from: number): number {
-    // Find the next word index after the specified index
+    // Handle edge cases
+    if (!line || from < 0) return 0;
+    if (from >= line.length) return line.length;
+    
+    // Find the next word boundary after the specified index
     for (let i = from; i < line.length; i++) {
         if (WORD_BREAK_CHARS.includes(line[i])) {
             return i;
@@ -57,8 +61,14 @@ export function findNextWord(line: string, from: number): number {
     }
     return line.length;
 }
+
 export function findPrevWord(line: string, from: number): number {
-    // Find the previous word index before the specified index
+    // Handle shorter texts and edge cases
+    if (!line) return 0;
+    if (from <= 0) return 0;
+    if (from > line.length) from = line.length;
+    
+    // Start from the character before the cursor, looking backwards
     for (let i = from - 1; i >= 0; i--) {
         const ch = line[i];
         if (WORD_BREAK_CHARS.includes(ch)) {
@@ -66,6 +76,48 @@ export function findPrevWord(line: string, from: number): number {
         }
     }
     return 0;
+}
+
+/**
+ * Determine the range to replace for completion
+ * @param line The line of text
+ * @param column Current column position
+ * @returns Object with start and end indices for replacement
+ */
+export function getCompletionRange(line: string, column: number): { start: number; end: number } {
+    if (!line) return { start: 0, end: 0 };
+    
+    const lineLength = line.length;
+    
+    // Ensure column is within bounds
+    column = Math.max(0, Math.min(column, lineLength));
+    
+    // If we're at the end of the line or only whitespace follows
+    if (column >= lineLength || /^\s/.test(line.slice(column))) {
+        const start = findPrevWord(line, column);
+        return { start, end: column };
+    }
+    
+    // In the middle of a word - replace the entire word
+    const start = findPrevWord(line, column);
+    const end = findNextWord(line, column);
+    return { start, end };
+}
+
+export function findNodeAndOffset(lineDiv: AnycodeLine, targetOffset: number) {
+    let currentOffset = targetOffset;
+    for (let chunkNode of lineDiv.children) {
+        if (!chunkNode.textContent) continue;
+        const textLength = chunkNode.textContent.length;
+        if (currentOffset <= textLength) {
+            return {
+                node: chunkNode.firstChild,
+                offset: currentOffset
+            };
+        }
+        currentOffset -= textLength;
+    }
+    return null;
 }
 
 // Grapheme cluster helpers
@@ -199,4 +251,25 @@ export function getIndentation(line: string, column?: number): string {
         i++;
     }
     return line.slice(0, i);
+}
+
+export function scoreMatches(src: string, matchStr: string): number {
+    if (src === matchStr) return 10000;
+    let score = 0;
+
+    // If the match is at the beginning, we give it a high score.
+    if (src.startsWith(matchStr)) {
+        score += 1000;
+    }
+
+    // Each occurrence of matchStr in src adds a smaller score.
+    score += (src.match(new RegExp(matchStr, "g")) || []).length * 10;
+
+    // If match is close to the start of the string but not at the beginning, add some score.
+    const initialIndex = src.indexOf(matchStr);
+    if (initialIndex !== -1 && initialIndex > 0 && initialIndex < 5) {
+        score += 500;
+    }
+
+    return score;
 }

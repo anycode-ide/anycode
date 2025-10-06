@@ -333,7 +333,7 @@
 }
 
 /* Right panel (editor) spacing for toolbar - only when terminal is closed */
-.app-container:not(.terminal-visible) .anyeditor div div:last-child {
+.app-container:not(.terminal-visible) .anyeditor .code div:last-child {
     padding-bottom: calc(var(--toolbar-total-space));
 }
 

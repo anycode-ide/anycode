@@ -374,6 +374,14 @@ mod code_undo_tests {
         buffer.remove_text(0, 5, 0, 11);
         assert_eq!(buffer.text.to_string(), "hello");
     }
+
+    #[test]
+    fn test_code_char_at_end() {
+        let text = "console.log(\"Hello, World!\")";
+        let buffer = Code::from_str(text);
+        assert_eq!(buffer.char_to_position(0), (0, 0));
+        assert_eq!(buffer.char_to_position(text.len()), (0, text.len()));
+    }
     
     #[test]
     fn test_code_undo() {

@@ -3,7 +3,8 @@ import {
     generateCssClasses, addCssToDocument, isCharacter,
     AnycodeLine as AnycodeLine, Pos,
     minimize, objectHash,
-    findPrevWord, findNextWord
+    findPrevWord, findNextWord, getCompletionRange,
+    findNodeAndOffset, scoreMatches
 } from './utils';
 
 import { vesper } from './theme';
@@ -25,6 +26,7 @@ import {
 } from "./selection";
 
 import './styles.css';
+import { Completion, completionKindMap, CompletionRequest } from "./lsp";
 
 
 export class AnycodeEditor {
@@ -57,12 +59,13 @@ export class AnycodeEditor {
     
     private completionContainer: HTMLDivElement | null = null;
     private selectedCompletionIndex = 0;
-    private completions: string[] = [];
+    private completions: Completion[] = [];
+    private completionProvider: ((request: CompletionRequest) => Promise<Completion[]>) | null = null;
 
-    constructor(initialText = '', options: any = {}) {
+    constructor(initialText = '', filename: string = 'test.txt', options: any = {}) {
         this.offset = 0;
         const language = options.language || "javascript";
-        this.code = new Code(initialText, "test", language);
+        this.code = new Code(initialText, filename, language);
         this.settings = { lineHeight: 20, buffer: 30 };
         
         const theme = options.theme || vesper;
@@ -134,10 +137,17 @@ export class AnycodeEditor {
         for (const { line, message } of errors) {
             this.errorLines.set(line, message);
         }
+        this.renderErrors();
     }
     
-    public setCompletions(completions: string[]) {
+    public setCompletions(completions: Completion[]) {
         this.completions = completions;
+    }
+
+    public setCompletionProvider(
+        completionProvider: (request: CompletionRequest) => Promise<Completion[]>
+    ) {
+        this.completionProvider = completionProvider;
     }
 
     private setupEventListeners() {        
@@ -241,22 +251,23 @@ export class AnycodeEditor {
             div.onclick = () => {
                 console.log(`Run line ${lineNumber + 1}`);
             };
-        } else if (hasError) {
-            const errorText = this.errorLines.get(lineNumber)!;
-            div.textContent = '!';
-            div.title = errorText;
-            div.style.color = '#ff6b6b';
-            div.style.cursor = 'pointer';
-            div.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                navigator.clipboard.writeText(errorText).then(() => {
-                    console.log(`Copied error: ${errorText}`);
-                }).catch(err => {
-                    console.error('Failed to copy:', err);
-                });
-            };
         }
+        // else if (hasError) {
+        //     const errorText = this.errorLines.get(lineNumber)!;
+        //     div.textContent = '!';
+        //     div.title = errorText;
+        //     div.style.color = '#ff6b6b';
+        //     div.style.cursor = 'pointer';
+        //     div.onclick = (e) => {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         navigator.clipboard.writeText(errorText).then(() => {
+        //             console.log(`Copied error: ${errorText}`);
+        //         }).catch(err => {
+        //             console.error('Failed to copy:', err);
+        //         });
+        //     };
+        // }
     
         return div;
     }
@@ -563,9 +574,9 @@ export class AnycodeEditor {
         return this.codeContent.children[idx + 1] as AnycodeLine;
     }
     
-    
     private updateCursor(focus: boolean = true) {
         const { line, column } = this.code.getPosition(this.offset);
+        // console.log('updateCursor', { line, column, offset: this.offset });
         const lineDiv = this.getLine(line);
     
         if (lineDiv) {
@@ -624,6 +635,34 @@ export class AnycodeEditor {
         
         console.timeEnd('updateChanges');
     }
+
+    private renderErrors() {
+        console.time('renderErrors');  
+
+        const lines = this.getLines();
+        if (!lines.length) return;
+            
+        for (let i = 0; i < lines.length; i++) {
+            const lineDiv = lines[i];
+            const lineNumber = lineDiv.lineNumber;
+        
+            if (this.errorLines.has(lineNumber)) {
+                const dm = this.errorLines.get(lineNumber)!;
+                // Only update attribute if value is different or missing
+                if (lineDiv.getAttribute('data-error') !== dm) {
+                    lineDiv.setAttribute('data-error', dm);
+                    lineDiv.classList.add('has-error');
+                }
+            } else {
+                // Only remove attribute if it exists
+                if (lineDiv.hasAttribute('data-error')) {
+                    lineDiv.removeAttribute('data-error');
+                    lineDiv.classList.remove('has-error');
+                }
+            }
+        }
+        console.timeEnd('renderErrors');
+    }
     
     private handleClick(e: MouseEvent): void {
         // console.log("handleClick ", this.selection);
@@ -642,6 +681,10 @@ export class AnycodeEditor {
         // console.log('click pos ', pos, o);
         this.ignoreNextSelectionSet = true;
         this.updateCursor();
+
+        if (this.isCompletionOpen()){
+            this.closeCompletion();
+        }
     }
     
     private handleMouseUp(e: MouseEvent) {
@@ -896,6 +939,10 @@ export class AnycodeEditor {
         
         const result = await executeAction(action, ctx);
         this.applyEditResult(result);
+
+        if (this.isCompletionOpen()){
+            await this.showCompletion();
+        }
     }
     
     private getActionFromKey(event: KeyboardEvent): Action | null {
@@ -1057,48 +1104,139 @@ export class AnycodeEditor {
         this.renderCursorOrSelection(true);
     }
     
-    private async toggleCompletion() {
-        if (this.completionContainer) {
-            this.closeCompletionBox();
+    public async toggleCompletion() {
+        console.log('anycode: toggle completion');
+
+        if (this.isCompletionOpen()) {
+            this.closeCompletion();
             return;
         }
-        
-        if (!this.completions.length) return;
-        
-        this.completionContainer = document.createElement('div');
-        this.completionContainer.className = 'completion-box';
-            
-        const completions = this.completions;
+
+        await this.showCompletion();
+    }
+
+    public async showCompletion() {
+        if (!this.completionProvider) return;
+
+        let { line, column } = this.code.getPosition(this.offset);
+
+        let newCompletions = await this.completionProvider({
+            file: this.code.filename, row: line, column: column
+        });
+
+        if (newCompletions.length === 0) {
+            this.completions = [];
+            this.closeCompletion();
+            return;
+        }
+
+        let lineStr = this.code.line(line);
+        let prev = findPrevWord(lineStr, column)
+        let prevWord = lineStr.substring(prev, column)
+
+        newCompletions.sort((a, b) => {
+            let sa = scoreMatches(a.label, prevWord);
+            let sb = scoreMatches(b.label, prevWord);
+            if (sa === sb) return a.label.length - b.label.length;
+            else return sb - sa;
+        });
+
+        this.completions = newCompletions;
         this.selectedCompletionIndex = 0;
         
-        for (let i = 0; i < completions.length; i++) {
-            const item = completions[i];
-            const div = document.createElement('div');
-            div.className = 'completion-item';
-            div.textContent = item;
-            div.dataset.index = i.toString();
-            div.onmouseenter = () => this.highlightCompletion(i);
-            div.onclick = () => this.selectCompletion(i);
-            this.completionContainer!.appendChild(div);
+        this.renderCompletion();
+    }
+
+    private renderCompletion() {
+        if (!this.completionContainer) {
+            this.completionContainer = document.createElement('div');
+            this.completionContainer.className = 'completion-box glass';
+            this.container!.appendChild(this.completionContainer);
+            this.moveCompletion();
         }
-        this.highlightCompletion(0);
-    
-        const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        
-        // move completion under cursor position
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        const containerRect = this.container.getBoundingClientRect();
-        const top = rect.bottom - containerRect.top + this.container.scrollTop;
-        const left = rect.left - containerRect.left + this.container.scrollLeft;
-        
-        this.completionContainer!.style.position = 'absolute';
-        this.completionContainer!.style.top = `${top}px`;
-        this.completionContainer!.style.left = `${left}px`;
-    
-        this.container.appendChild(this.completionContainer!);
+
+        const completionCb = this.applyCompletion.bind(this);
+        const fragment = document.createDocumentFragment();
+
+        this.selectedCompletionIndex = 0;
+
+        this.completions.forEach((completion, i) => {
+            const completionDiv = document.createElement('div');
+            completionDiv.className = 'completion-item';
+            completionDiv.textContent = completion.label;
+
+            if (completion.kind) {  
+                const kindText = document.createElement('span');
+                kindText.className = 'completion-kind';
+                kindText.textContent = completionKindMap[completion.kind] || 'Unknown';
+                completionDiv.appendChild(kindText);
+            }
+
+            completionDiv.addEventListener('click', e => {
+                e.preventDefault();
+                completionCb(i);
+            });
+
+            // completionDiv.addEventListener('mouseenter', () => {
+            //     this.hoverCompletion(i);
+            // });
+            // completionDiv.addEventListener('mouseleave', () => {
+            //     this.hoverCompletion(-1);
+            // });
+
+            if (i === 0) completionDiv.classList.add('completion-active');
+            fragment.appendChild(completionDiv);
+        });
+
+        this.completionContainer.replaceChildren(fragment);
+        this.moveCompletion();
+    }
+
+    private moveCompletion() {
+
+        let { line, column } = this.code.getPosition(this.offset);
+
+        let lineStr = this.code.line(line);
+        let prev = findPrevWord(lineStr, column)
+
+        var completion = this.completionContainer;
+
+        const startLineDiv = this.getLine(line);
+        const startPos = findNodeAndOffset(startLineDiv!, prev+1);
+
+        if (startPos) {
+            // move completion to previous word position around cursor
+            const { node, offset } = startPos;
+
+            const calculateBoundingRect = (textNode: any) => {
+                const range = document.createRange();
+                range.selectNode(textNode);
+                return range.getBoundingClientRect();
+            };
+
+            const startRect = calculateBoundingRect(node);
+            const paddingLeft = parseInt(getComputedStyle(completion!).paddingLeft || "10");
+            const containerRect = this.container.getBoundingClientRect();
+            const left = startRect.left - containerRect.left + this.container.scrollLeft - paddingLeft*2;
+            const top = startRect.bottom - containerRect.top + this.container.scrollTop + 1;
+
+            if (completion && completion.style) {
+                completion.style.left = left + "px";
+                completion.style.top = top + "px";
+            }
+        } else {
+            // move completion under cursor position
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const containerRect = this.container.getBoundingClientRect();
+            const top = rect.bottom - containerRect.top + this.container.scrollTop;
+            const left = rect.left - containerRect.left + this.container.scrollLeft;
+            this.completionContainer!.style.position = 'absolute';
+            this.completionContainer!.style.top = `${top}px`;
+            this.completionContainer!.style.left = `${left}px`;
+        }
     }
     
     private highlightCompletion(index: number) {
@@ -1106,22 +1244,57 @@ export class AnycodeEditor {
         const children = this.completionContainer.children;
         for (let i = 0; i < children.length; i++) {
             const el = children[i] as HTMLElement;
-            el.style.background = i === index ? '#333' : 'transparent';
+            el.classList.toggle('completion-active', i === index);
             if (i === index) el.scrollIntoView({ block: 'nearest' });
         }
         this.selectedCompletionIndex = index;
     }
 
-    
-    private selectCompletion(index: number) {
-        const value = this.completions[index];
-        // todo insert completion logic here
-        this.closeCompletionBox();
+    private hoverCompletion(index: number) {
+        if (!this.completionContainer) return;
+        const children = this.completionContainer.children;
+        for (let i = 0; i < children.length; i++) {
+            const el = children[i] as HTMLElement;
+            el.classList.toggle('completion-hover', i === index);
+        }
     }
-    
-    private closeCompletionBox() {
+
+    public applyCompletion(index: number) {
+        if (index < 0 || index >= this.completions.length) return;
+        if (!this.completionContainer) return;
+
+        let { line, column } = this.code.getPosition(this.offset);
+        let completionItem = this.completions[index];
+        let text = completionItem.label;
+        
+        let lineStr = this.code.line(line);
+        
+        // Determine the range to replace using the helper function
+        let { start: replaceStart, end: replaceEnd } = getCompletionRange(lineStr, column);
+
+        // Start transaction and perform replacement
+        this.code.tx();
+        let startOffset = this.code.getOffset(line, replaceStart);
+        let endOffset = this.code.getOffset(line, replaceEnd);
+        this.code.remove(startOffset, endOffset - startOffset);
+        this.code.insert(text, startOffset);
+        this.code.commit();
+
+        // Update cursor position to end of inserted text
+        this.offset = startOffset + text.length;
+
+        this.closeCompletion();
+        this.renderChanges();
+        this.updateCursor();
+    }
+
+    private closeCompletion() {
         this.completionContainer?.remove();
         this.completionContainer = null;
+    }
+
+    private isCompletionOpen() {
+        return this.completionContainer !== null;
     }
     
     private handleCompletionKey(event: KeyboardEvent): boolean {
@@ -1142,12 +1315,12 @@ export class AnycodeEditor {
         }
     
         if (event.key === "Enter") {
-            this.selectCompletion(this.selectedCompletionIndex);
+            this.applyCompletion(this.selectedCompletionIndex);
             return true;
         }
     
         if (event.key === "Escape") {
-            this.closeCompletionBox();
+            this.closeCompletion();
             return true;
         }
     
