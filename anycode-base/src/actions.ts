@@ -81,7 +81,7 @@ export const handleTextInput = (ctx: ActionContext): ActionResult => {
     ctx.code.tx();
     ctx.code.setStateBefore(ctx.offset, ctx.selection);
     
-    if (ctx.selection && ctx.selection.nonEmpty()) {
+    if (ctx.selection?.nonEmpty()) {
         removeSelection(ctx);
     }
     
@@ -108,8 +108,6 @@ export const removeSelection = (ctx: ActionContext): ActionResult => {
 }
 
 export const handleBackspace = (ctx: ActionContext): ActionResult => {
-    if (ctx.offset <= 0) { return { ctx, changed: false } }
-
     ctx.code.tx();
     ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
@@ -119,6 +117,8 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
         ctx.code.commit();
         return { ctx, changed: true };
     }
+
+    if (ctx.offset <= 0) { return { ctx, changed: false } }
 
     let { line, column } = ctx.code.getPosition(ctx.offset);
 
@@ -162,7 +162,7 @@ export const handleEnter = (ctx: ActionContext): ActionResult => {
     ctx.code.tx();
     ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
-    if (ctx.selection && ctx.selection.nonEmpty()) {
+    if (ctx.selection?.nonEmpty()) {
         removeSelection(ctx);
     }
 
@@ -183,7 +183,6 @@ export const handleEnter = (ctx: ActionContext): ActionResult => {
 };
 
 export const handleUndo = (ctx: ActionContext): ActionResult => {
-    console.log("undo")
     const transaction = ctx.code.undo();
 
     if (transaction) {
@@ -209,7 +208,6 @@ export const handleUndo = (ctx: ActionContext): ActionResult => {
 };
 
 export const handleRedo = (ctx: ActionContext): ActionResult => {
-    console.log("undo")
     const transaction = ctx.code.redo();
 
     if (transaction) {
@@ -295,8 +293,8 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
         ctx.code.tx();
         ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
-        if (ctx.selection && ctx.selection.nonEmpty()) {
-            const [start, end] = ctx.selection.sorted();
+        if (ctx.selection?.nonEmpty()) {
+            const [start, end] = ctx.selection!.sorted();
             ctx.code.remove(start, end - start);
             o = start;
             ctx.selection = undefined;
@@ -317,7 +315,7 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
 export const handleDuplicate = async (ctx: ActionContext): Promise<ActionResult> => {
     let start: number, end: number, textToDuplicate: string, insertPos: number, newOffset: number;
 
-    if (ctx.selection && ctx.selection.nonEmpty()) {
+    if (ctx.selection?.nonEmpty()) {
         // Duplicate the selected text after the selection
         [start, end] = ctx.selection.sorted();
         textToDuplicate = ctx.code.getIntervalContent2(start, end);
@@ -752,7 +750,7 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
 };
 
 export const handleEsc = (ctx: ActionContext): ActionResult => {
-    if (ctx.selection && !ctx.selection.isEmpty()) {
+    if (!ctx.selection?.isEmpty()) {
         ctx.selection = undefined;
         return { ctx, changed: true };
     }
