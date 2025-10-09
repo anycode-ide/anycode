@@ -8,6 +8,8 @@ import {
 } from 'vscode-textbuffer/src/common/range';
 
 import Parser from 'web-tree-sitter';
+import History from './history';
+import { Selection } from './selection';
 
 import javascript from './langs/javascript';
 import typescript from './langs/typescript';
@@ -39,8 +41,15 @@ export type Edit = {
     text: string;
 };
 
+export type EditState = {
+    offset: number;
+    selection?: Selection;
+};
+
 export type Transaction = {
     edits: Edit[];
+    stateBefore?: EditState;
+    stateAfter?: EditState;
 };
 
 export type Position = {
@@ -89,10 +98,11 @@ export class Code {
 
     private linesCache: Map<number, HighlighedNode[]> = new Map()
 
-    public undoStack: Transaction[] = []
-    public redoStack: Transaction[] = []
+    private history = new History<Transaction>()
     private transactionActive: boolean = false;
     private transactionEdits: Edit[] = [];
+    private transactionStateBefore?: EditState;
+    private transactionStateAfter?: EditState;
 
     private onEdit: ((e: Edit) => void) | null = null
 
@@ -341,8 +351,7 @@ export class Code {
 
         if (addHistory) {
             let transaction = { edits: [edit] } as Transaction;
-            this.undoStack.push(transaction);
-            this.redoStack = [];
+            this.recordTransaction(transaction);
         }
 
         if (this.transactionActive) {
@@ -381,8 +390,7 @@ export class Code {
 
         if (addHistory) {
             let transaction = { edits: [edit] } as Transaction;
-            this.undoStack.push(transaction);
-            this.redoStack = [];
+            this.recordTransaction(transaction);
         }
 
         if (this.transactionActive) {
@@ -474,8 +482,7 @@ export class Code {
             }
 
             if (addHistory) {
-                this.undoStack.push(transaction);
-                this.redoStack = [];
+                this.recordTransaction(transaction);
             }
 
             this.linesCache.clear();
@@ -489,67 +496,71 @@ export class Code {
             throw err;
         }
     }
-
+    
     tx() {
         this.transactionActive = true;
         this.transactionEdits = [];
     }
 
+    setStateBefore(offset: number, selection?: Selection) {
+        this.transactionStateBefore = { offset, selection: selection?.clone() };
+    }
+
+    setStateAfter(offset: number, selection?: Selection) {
+        this.transactionStateAfter = { offset, selection: selection?.clone() };
+    }
+
     commit() {
         if (this.transactionActive) {
-            let transaction = { edits: this.transactionEdits } as Transaction;
-            this.undoStack.push(transaction);
-            // this.redoStack = [];
+            let transaction = { 
+                edits: this.transactionEdits, 
+                stateBefore:  this.transactionStateBefore,
+                stateAfter:  this.transactionStateAfter,
+            } as Transaction;
+
+            this.recordTransaction(transaction);
+
             this.transactionActive = false;
             this.transactionEdits = [];
+            this.transactionStateAfter = undefined;
+            this.transactionStateBefore = undefined;
         } else {
             console.error('No active transaction to commit');
         }
     }
 
+    private recordTransaction(transaction: Transaction) {
+        this.history.push(transaction);
+    }
+
     public undo(): Transaction | undefined {
-        if (this.undoStack.length === 0) return undefined;
+        const transaction = this.history.undo();
+        if (!transaction) return undefined;
+        const edits = [...transaction.edits].reverse();
 
-        const transaction = this.undoStack.pop()!;
-        transaction.edits.reverse();
-
-        const inverseTransaction: Transaction = {
-            edits: transaction.edits.map(edit => ({
-                operation: edit.operation === Operation.Insert ?
-                    Operation.Remove : Operation.Insert,
-                start: edit.start,
-                text: edit.text
-            }))
-        };
-
-        try {
-            this.applyTransaction(inverseTransaction, false);
-            this.redoStack.push(transaction);
-            return transaction;
-        } catch (err) {
-            console.error('Error during undo:', err);
-            // If undo fails, push the transaction back onto the undo stack
-            this.undoStack.push(transaction);
-            throw err;
+        for (const edit of edits) {
+            if (edit.operation === Operation.Insert) {
+                this.remove(edit.start, edit.text.length);
+            } else if (edit.operation === Operation.Remove) {
+                this.insert(edit.text, edit.start);
+            }
         }
+        return transaction;
     }
 
     public redo(): Transaction | null {
-        if (this.redoStack.length === 0) return null;
+        const transaction = this.history.redo();
+        if (!transaction) return null;
+        const edits = transaction.edits;
 
-        const transaction = this.redoStack.pop()!;
-        if (transaction.edits.length > 0) transaction.edits.reverse();
-
-        try {
-            this.applyTransaction(transaction, false);
-            this.undoStack.push(transaction);
-            return transaction;
-        } catch (err) {
-            console.error('Error during redo:', err);
-            // If redo fails, push the transaction back onto the redo stack
-            this.redoStack.push(transaction);
-            throw err;
+        for (const edit of edits) {
+            if (edit.operation === Operation.Insert) {
+                this.insert(edit.text, edit.start);
+            } else if (edit.operation === Operation.Remove) {
+                this.remove(edit.start, edit.text.length);
+            }
         }
+        return transaction;
     }
 
     getLang(lang: string): Lang | null {

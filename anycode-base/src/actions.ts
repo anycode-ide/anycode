@@ -10,6 +10,7 @@ export enum Action {
     ARROW_DOWN = 'ARROW_DOWN',
     ARROW_LEFT_ALT = 'ARROW_LEFT_ALT',
     ARROW_RIGHT_ALT = 'ARROW_RIGHT_ALT',
+    ESC = 'ESC',
 
     // Editing
     BACKSPACE = 'BACKSPACE',
@@ -53,6 +54,7 @@ export const executeAction = async (
         case Action.ARROW_RIGHT_ALT: return moveArrowRight(ctx, true);
         case Action.ARROW_UP: return moveArrowUp(ctx);
         case Action.ARROW_DOWN:  return moveArrowDown(ctx);
+        case Action.ESC:  return handleEsc(ctx);
 
         // Editing
         case Action.BACKSPACE: return handleBackspace(ctx);
@@ -77,6 +79,7 @@ export const executeAction = async (
 
 export const handleTextInput = (ctx: ActionContext): ActionResult => {
     ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
     
     if (ctx.selection && ctx.selection.nonEmpty()) {
         removeSelection(ctx);
@@ -85,6 +88,8 @@ export const handleTextInput = (ctx: ActionContext): ActionResult => {
     let text = ctx.event!.key;
     ctx.code.insert(text, ctx.offset);
     ctx.offset += text.length;
+
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
     ctx.code.commit();
     
     return { ctx, changed: true };
@@ -103,17 +108,16 @@ export const removeSelection = (ctx: ActionContext): ActionResult => {
 }
 
 export const handleBackspace = (ctx: ActionContext): ActionResult => {
+    if (ctx.offset <= 0) { return { ctx, changed: false } }
+
     ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
     if (ctx.selection?.nonEmpty()) {
         removeSelection(ctx);
+        ctx.code.setStateAfter(ctx.offset, ctx.selection);
         ctx.code.commit();
         return { ctx, changed: true };
-    }
-
-    if (ctx.offset <= 0) {
-        ctx.code.commit();
-        return { ctx, changed: false };
     }
 
     let { line, column } = ctx.code.getPosition(ctx.offset);
@@ -122,6 +126,7 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
     if (column === 0 && line > 0) {
         ctx.offset -= 1;
         ctx.code.remove(ctx.offset, 1);
+        ctx.code.setStateAfter(ctx.offset, ctx.selection);
         ctx.code.commit();
         return { ctx, changed: true };
     }
@@ -147,6 +152,7 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
         ctx.code.remove(ctx.offset, removeLen);
     }
 
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
     ctx.code.commit();
 
     return { ctx, changed: true };
@@ -154,6 +160,7 @@ export const handleBackspace = (ctx: ActionContext): ActionResult => {
 
 export const handleEnter = (ctx: ActionContext): ActionResult => {
     ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
     if (ctx.selection && ctx.selection.nonEmpty()) {
         removeSelection(ctx);
@@ -167,25 +174,34 @@ export const handleEnter = (ctx: ActionContext): ActionResult => {
 
     ctx.code.insert(newlineWithIndent, ctx.offset);
     ctx.offset += newlineWithIndent.length;
-
-    ctx.code.commit();
+    
     ctx.selection = undefined;
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
+    ctx.code.commit();
 
     return { ctx, changed: true };
 };
 
 export const handleUndo = (ctx: ActionContext): ActionResult => {
+    console.log("undo")
     const transaction = ctx.code.undo();
 
     if (transaction) {
-        for (const edit of transaction.edits) {
-            if (edit.operation === 0) {
-                ctx.offset = edit.start;
-            } else if (edit.operation === 1) {
-                ctx.offset = edit.start + edit.text.length;
+        if (transaction.stateBefore) { 
+            // use state before to restore cursor and selection
+            ctx.offset = transaction.stateBefore.offset;
+            ctx.selection = transaction.stateBefore.selection;
+        } else {
+            // calculate new cursor position
+            for (const edit of transaction.edits) {
+                if (edit.operation === 0) {
+                    ctx.offset = edit.start;
+                } else if (edit.operation === 1) {
+                    ctx.offset = edit.start + edit.text.length;
+                }
             }
+            ctx.selection = undefined;
         }
-        ctx.selection = undefined;
         return { ctx, changed: true };
     }
 
@@ -193,17 +209,25 @@ export const handleUndo = (ctx: ActionContext): ActionResult => {
 };
 
 export const handleRedo = (ctx: ActionContext): ActionResult => {
+    console.log("undo")
     const transaction = ctx.code.redo();
 
     if (transaction) {
-        for (const edit of transaction.edits) {
-            if (edit.operation === 0) {
-                ctx.offset = edit.start + edit.text.length;
-            } else if (edit.operation === 1) {
-                ctx.offset = edit.start;
+        if (transaction.stateAfter) {
+            // use state after to restore cursor and selection
+            ctx.offset = transaction.stateAfter.offset;
+            ctx.selection = transaction.stateAfter.selection;
+        } else {
+            // calculate new cursor position
+            for (const edit of transaction.edits) {
+                if (edit.operation === 0) {
+                    ctx.offset = edit.start + edit.text.length;
+                } else if (edit.operation === 1) {
+                    ctx.offset = edit.start;
+                }
             }
+            ctx.selection = undefined;
         }
-        ctx.selection = undefined;
         return { ctx, changed: true };
     }
 
@@ -269,6 +293,8 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
         let o = ctx.offset;
 
         ctx.code.tx();
+        ctx.code.setStateBefore(ctx.offset, ctx.selection);
+
         if (ctx.selection && ctx.selection.nonEmpty()) {
             const [start, end] = ctx.selection.sorted();
             ctx.code.remove(start, end - start);
@@ -277,9 +303,10 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
         }
 
         ctx.code.insert(text, o);
+        ctx.offset = o + text.length;
+        ctx.code.setStateAfter(ctx.offset, ctx.selection);
         ctx.code.commit();
 
-        ctx.offset = o + text.length;
         return { ctx, changed: true };
     } catch (err) {
         console.error('Failed to paste:', err);
@@ -312,12 +339,15 @@ export const handleDuplicate = async (ctx: ActionContext): Promise<ActionResult>
     }
 
     ctx.code.tx();
-    ctx.code.insert(textToDuplicate, insertPos);
-    ctx.code.commit();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
+    ctx.code.insert(textToDuplicate, insertPos);
+    
     ctx.offset = newOffset;
     ctx.selection = undefined;
 
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
+    ctx.code.commit();
     return { ctx, changed: true };
 }
 
@@ -336,11 +366,14 @@ export const handleCut = async (ctx: ActionContext): Promise<ActionResult> => {
         console.log('Cut:', content);
 
         ctx.code.tx();
-        ctx.code.remove(start, end - start);
-        ctx.code.commit();
+        ctx.code.setStateBefore(ctx.offset, ctx.selection);
 
+        ctx.code.remove(start, end - start);
+        
         ctx.offset = start;
         ctx.selection = undefined;
+        ctx.code.setStateAfter(ctx.offset, ctx.selection);
+        ctx.code.commit();
         return { ctx, changed: true };
     } catch (err) {
         console.error('Failed to cut:', err);
@@ -363,28 +396,40 @@ export const handleTab = (ctx: ActionContext): ActionResult => {
     }
 
     const indent = ctx.code.getIndent();
-    const text = indent?.unit === ' ' 
+    const indentText = indent?.unit === ' ' 
         ? ' '.repeat(indent.width) 
         : '\t';
 
     ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
+
     linesToHandle.reverse();
 
-    let cursor = -1;
-
+    let indents_added = 0;
     for (const line of linesToHandle) {
         const start = ctx.code.getOffset(line, 0);
-        ctx.code.insert(text, start);
-        if (cursor === -1) {
-            cursor = ctx.offset + text.length;
-        }
+        ctx.code.insert(indentText, start);
+        indents_added += 1;
     }
 
+    if (ctx.selection && !ctx.selection.isEmpty()) {
+        let [smin, smax] = ctx.selection.sorted();
+        let anchor = ctx.selection.anchor!;
+        let is_selection_forward = ctx.selection.anchor == smin;
+        if (is_selection_forward) {
+            ctx.offset += indentText.length * indents_added;
+            anchor += indentText.length;
+        } else {
+            ctx.offset += indentText.length;
+            anchor += indentText.length * indents_added;
+        }
+        ctx.selection = new Selection(anchor, ctx.offset);
+    } else {
+        ctx.offset += indentText.length;
+    }
+
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
     ctx.code.commit();
-
-    if (cursor !== -1) ctx.offset = cursor;
-    ctx.selection = undefined;
-
     return { ctx, changed: true };
 };
 
@@ -404,29 +449,43 @@ export const handleUnTab = (ctx: ActionContext): ActionResult => {
     }
 
     const indent = ctx.code.getIndent();
-    const text = indent?.unit === ' ' ? ' '.repeat(indent.width) : '\t';
+    const indentText = indent?.unit === ' ' ? ' '.repeat(indent.width) : '\t';
 
     ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
+
     linesToHandle.reverse();
 
-    let cursor = -1;
+    let lines_untabbed = 0;
 
     for (const line of linesToHandle) {
-        const tabMatches = ctx.code.searchOnLine(line, text.length, text);
+        const tabMatches = ctx.code.searchOnLine(line, indentText.length, indentText);
         if (tabMatches.length > 0) {
             const c = tabMatches[0];
             const start = ctx.code.getOffset(line, c);
-            ctx.code.remove(start, text.length);
-            if (cursor === -1) {
-                cursor = ctx.offset - text.length;
-            }
+            ctx.code.remove(start, indentText.length);
+            lines_untabbed += 1;
         }
     }
 
-    ctx.code.commit();
+    if (ctx.selection && !ctx.selection.isEmpty()) {
+        let [smin, smax] = ctx.selection.sorted();
+        let anchor = ctx.selection.anchor!;
+        let is_selection_forward = ctx.selection.anchor == smin;
+        if (is_selection_forward) {
+            ctx.offset -= indentText.length * lines_untabbed;
+            anchor -= indentText.length;
+        } else {
+            ctx.offset -= indentText.length;
+            anchor -= indentText.length * lines_untabbed;
+        }
+        ctx.selection = new Selection(anchor, ctx.offset);
+    } else {
+        ctx.offset -= indentText.length;
+    }
 
-    if (cursor !== -1) ctx.offset = cursor;
-    ctx.selection = undefined;
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
+    ctx.code.commit();
 
     return { ctx, changed: true };
 };
@@ -455,9 +514,12 @@ export const handleToggleComment = (ctx: ActionContext): ActionResult => {
     });
 
     ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
+
     linesToHandle.reverse();
 
-    let cursor = -1;
+    let comments_added = 0;
+    let comments_removed = 0;
 
     for (const line of linesToHandle) {
         const lineText = ctx.code.line(line);
@@ -469,20 +531,47 @@ export const handleToggleComment = (ctx: ActionContext): ActionResult => {
                 const c = matches[0];
                 const start = ctx.code.getOffset(line, c);
                 ctx.code.remove(start, comment.length);
-                if (cursor === -1) cursor = ctx.offset - comment.length;
+                comments_removed += 1;
             }
         } else {
             // insert comment
             const start = ctx.code.getOffset(line, 0);
             ctx.code.insert(comment, start);
-            if (cursor === -1) cursor = ctx.offset + comment.length;
+            comments_added += 1;
         }
     }
 
-    ctx.code.commit();
+    if (ctx.selection && !ctx.selection.isEmpty()) {
+        let [smin, smax] = ctx.selection.sorted();
+        let anchor = ctx.selection.anchor!;
+        let is_selection_forward = ctx.selection.anchor == smin;
+        if (is_selection_forward) {
+            if (!commentFound) {
+                ctx.offset += comment.length * comments_added;
+                anchor += comment.length;
+            }
+            else {
+                ctx.offset -= comment.length * comments_removed;
+                anchor -= comment.length;
+            }
+        } else {
+            if (!commentFound) {
+                ctx.offset += comment.length;
+                anchor += comment.length * comments_added;
+            }
+            else {
+                ctx.offset -= comment.length;
+                anchor -= comment.length * comments_removed;
+            }
+        }
+        ctx.selection = new Selection(anchor, ctx.offset);
+    } else {
+        if (!commentFound) ctx.offset += comment.length;
+        else ctx.offset -= comment.length;
+    }
 
-    if (cursor !== -1) ctx.offset = cursor;
-    ctx.selection = undefined;
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
+    ctx.code.commit();
 
     return { ctx, changed: true };
 };
@@ -661,3 +750,12 @@ export const moveArrowLeft = (ctx: ActionContext, alt: boolean): ActionResult =>
 
     return { ctx, changed: false };
 };
+
+export const handleEsc = (ctx: ActionContext): ActionResult => {
+    if (ctx.selection && !ctx.selection.isEmpty()) {
+        ctx.selection = undefined;
+        return { ctx, changed: true };
+    }
+
+    return { ctx, changed: false };
+}

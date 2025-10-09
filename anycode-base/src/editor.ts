@@ -991,6 +991,7 @@ export class AnycodeEditor {
             case "Delete": return Action.DELETE;
             case "Enter": return Action.ENTER;
             case "Tab": return Action.TAB;
+            case "Escape": return Action.ESC;
         }
         
         // Text input
