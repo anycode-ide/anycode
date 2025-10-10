@@ -283,6 +283,81 @@ async function copyToClipboard(textToCopy: string) {
     }
 }
 
+/**
+ * Smart paste with indentation awareness.
+ * 
+ * 1. Determine the indentation level at the cursor (`base_level`).
+ * 2. The first line of the pasted block is inserted at the cursor level (trimmed).
+ * 3. Subsequent lines adjust their indentation **relative to the previous non-empty line in the pasted block**:
+ *    - Compute `diff` = change in indentation from the previous non-empty line in the source block (clamped ±1).
+ *    - Apply `diff` to `prev_nonempty_level` to calculate the new insertion level.
+ * 4. Empty lines are inserted as-is and do not affect subsequent indentation.
+ * 
+ * This ensures that pasted blocks keep their relative structure while aligning to the cursor.
+ */
+export function smartPaste(code: Code, offset: number, text: string): string {
+    const { line, column } = code.getPosition(offset);
+    const baseLevel = code.getIndentationLevel(line, column);
+    const indent = code.getIndent();
+    
+    if (!indent) {
+        return text;
+    }
+    
+    const lines = text.split('\n');
+    if (lines.length === 0) {
+        return '';
+    }
+    
+    // Compute indentation levels of all lines in the source block
+    const lineLevels: number[] = [];
+    for (const lineText of lines) {
+        let level = 0;
+        let rest = lineText;
+        const indentUnit = indent.unit === ' ' ? ' '.repeat(indent.width) : '\t';
+        
+        while (rest.startsWith(indentUnit)) {
+            level++;
+            rest = rest.substring(indentUnit.length);
+        }
+        lineLevels.push(level);
+    }
+    
+    const result: string[] = [];
+    
+    // First line is inserted at cursor level (trimmed)
+    const firstLineTrimmed = lines[0].trimStart();
+    result.push(firstLineTrimmed);
+    
+    let prevNonEmptyLevel = baseLevel;
+    let prevLineLevelInBlock = lineLevels[0];
+    
+    for (let i = 1; i < lines.length; i++) {
+        const lineText = lines[i];
+        
+        if (lineText.trim() === '') {
+            // Empty lines are inserted as-is
+            result.push(lineText);
+            continue;
+        }
+        
+        // diff relative to previous non-empty line in the source block
+        const diff = Math.max(-1, Math.min(1, lineLevels[i] - prevLineLevelInBlock));
+        const newLevel = Math.max(0, prevNonEmptyLevel + diff);
+        
+        const indentUnit = indent.unit === ' ' ? ' '.repeat(indent.width) : '\t';
+        const indents = indentUnit.repeat(newLevel);
+        const resultLine = indents + lineText.trimStart();
+        result.push(resultLine);
+        
+        // Update levels only for non-empty line
+        prevNonEmptyLevel = newLevel;
+        prevLineLevelInBlock = lineLevels[i];
+    }
+    
+    return result.join('\n');
+}
+
 export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => {
     try {
         const text = await navigator.clipboard.readText();
@@ -300,8 +375,9 @@ export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => 
             ctx.selection = undefined;
         }
 
-        ctx.code.insert(text, o);
-        ctx.offset = o + text.length;
+        const toInsert = smartPaste(ctx.code, o, text);
+        ctx.code.insert(toInsert, o);
+        ctx.offset = o + toInsert.length;
         ctx.code.setStateAfter(ctx.offset, ctx.selection);
         ctx.code.commit();
 

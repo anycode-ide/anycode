@@ -10,7 +10,7 @@ import {
 import { vesper } from './theme';
 import {
     Action, ActionContext, ActionResult, executeAction,
-    removeSelection
+    removeSelection, smartPaste
 } from './actions';
 import {
     getPosFromMouse
@@ -1088,6 +1088,8 @@ export class AnycodeEditor {
         let insertOffset = this.offset;
 
         this.code.tx();
+        this.code.setStateBefore(this.offset, this.selection || undefined);
+
         if (this.selection && this.selection.nonEmpty()) {
             const [start, end] = this.selection.sorted();
             this.code.remove(start, end - start);
@@ -1095,10 +1097,14 @@ export class AnycodeEditor {
             this.selection = null;
         }
 
-        this.code.insert(pastedText, insertOffset);
+        // Use smart paste for indentation awareness
+        const toInsert = smartPaste(this.code, insertOffset, pastedText);
+        this.code.insert(toInsert, insertOffset);
+        
+        this.offset = insertOffset + toInsert.length;
+        
+        this.code.setStateBefore(this.offset, this.selection || undefined);
         this.code.commit();
-
-        this.offset = insertOffset + pastedText.length;
 
         this.maxLineWidth = 0;
         this.renderChanges();
