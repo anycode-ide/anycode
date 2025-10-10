@@ -72,6 +72,33 @@ EXPOSE $ANYCODE_PORT
 
 COPY . /develop
 
+
+# Install rust
+RUN apt-get update && apt-get install -y build-essential
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup component add rust-analyzer
+
+#  install ts
+ENV NVM_DIR=/root/.nvm
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash && \
+    . "$NVM_DIR/nvm.sh" && \
+    nvm install 24 && \
+    nvm alias default 24 && \
+    nvm use default && \
+    npm install -g typescript typescript-language-server && \
+    mkdir -p /usr/local/bin && \
+    ln -s $(ls -d $NVM_DIR/versions/node/v24*/bin/typescript-language-server | head -n1) /usr/local/bin/typescript-language-server && \
+    ln -s $(ls -d $NVM_DIR/versions/node/v24*/bin/tsc | head -n1) /usr/local/bin/tsc
+
+# install python
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh 
+ENV PATH="/root/.local/bin/:$PATH"
+RUN uv python install --default --preview && \
+    uv pip install --system --break-system-packages pyright
+RUN ln -s $(ls -d /root/.local/share/uv/python/cpython-*/bin/pyright-langserver | head -n1) /usr/local/bin/pyright-langserver
+
+
 WORKDIR /develop
 CMD ["/app/backend/anycode"]
 

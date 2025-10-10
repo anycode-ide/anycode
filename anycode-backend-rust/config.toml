@@ -44,7 +44,7 @@ exectest = "tsx -m pytest -k {test} {file}"
 name = "typescript"
 types = ["ts", "tsx"]
 comment = "//"
-lsp = ["vtsls", "--stdio"]
+lsp = ["typescript-language-server", "--stdio"]
 indent = { width = 2, unit = " " }
 executable = true
 exec = "tsx {file}"
