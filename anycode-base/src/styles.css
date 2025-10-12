@@ -58,6 +58,9 @@
   padding: 0 4px;
   vertical-align: middle;
   line-height: 1;
+  display: inline-block; 
+  position: relative;
+  pointer-events: none;
 }
 
 .completion-box {

@@ -51,7 +51,6 @@ export class AnycodeEditor {
     private isWordSelection: boolean = false;
     private wordSelectionAnchor: number = 0;
     
-    private isRenderPending = false;
     private lastScrollTop = 0;
 
     private runLines: number[] = [];
@@ -197,16 +196,12 @@ export class AnycodeEditor {
 
     private handleScroll() {
         const scrollTop = this.container.scrollTop;
-        if (!this.isRenderPending) {
-            requestAnimationFrame(() => {
-                if (scrollTop !== this.lastScrollTop) {
-                    this.renderScroll();
-                    this.lastScrollTop = scrollTop;
-                }
-                this.isRenderPending = false;
-            });
-            this.isRenderPending = true;
-        }
+        requestAnimationFrame(() => {
+            if (scrollTop !== this.lastScrollTop) {
+                this.renderScroll();
+                this.lastScrollTop = scrollTop;
+            }
+        });
     }
 
     public hasScroll() {
@@ -1102,7 +1097,7 @@ export class AnycodeEditor {
         this.code.insert(toInsert, insertOffset);
         
         this.offset = insertOffset + toInsert.length;
-        
+
         this.code.setStateBefore(this.offset, this.selection || undefined);
         this.code.commit();
 
