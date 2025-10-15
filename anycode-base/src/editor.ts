@@ -47,7 +47,6 @@ export class AnycodeEditor {
     private isMouseSelecting: boolean = false;
     private selection: Selection | null = null;
     private autoScrollTimer: number | null = null;
-    private ignoreNextSelectionSet: boolean = false;
     private isWordSelection: boolean = false;
     private wordSelectionAnchor: number = 0;
     
@@ -173,9 +172,6 @@ export class AnycodeEditor {
         
         this.handleMouseMove = this.handleMouseMove.bind(this);
         this.container.addEventListener('mousemove', this.handleMouseMove);
-        
-        this.handleSelectionChange = this.handleSelectionChange.bind(this);
-        document.addEventListener('selectionchange', this.handleSelectionChange);
 
         this.handleBlur = this.handleBlur.bind(this);
         this.codeContent.addEventListener('blur', this.handleBlur);
@@ -190,7 +186,6 @@ export class AnycodeEditor {
         this.codeContent.removeEventListener('mousedown', this.handleMouseDown);
         this.container.removeEventListener('mouseup', this.handleMouseUp);
         this.container.removeEventListener('mousemove', this.handleMouseMove);
-        document.removeEventListener('selectionchange', this.handleSelectionChange);
         this.codeContent.removeEventListener('blur', this.handleBlur);
     }
 
@@ -529,8 +524,6 @@ export class AnycodeEditor {
         if (!this.selection || this.selection.isEmpty()) {
             this.updateCursor(focus);
         } else {
-            this.ignoreNextSelectionSet = true;
-
             let lines = this.getLines();
             let attached = true;
             for (const line of lines) {
@@ -674,7 +667,6 @@ export class AnycodeEditor {
         this.offset = o;
         
         // console.log('click pos ', pos, o);
-        this.ignoreNextSelectionSet = true;
         this.updateCursor();
 
         if (this.isCompletionOpen()){
@@ -730,7 +722,6 @@ export class AnycodeEditor {
     
         if (e.shiftKey && this.selection) {
             this.selection.updateCursor(o);
-            this.ignoreNextSelectionSet = true;
             renderSelection(this.selection, this.getLines(), this.code)
         } else {
             if (this.selection) {
@@ -808,7 +799,6 @@ export class AnycodeEditor {
             
             if (oldSelection && !oldSelection.equals(this.selection)) {
                 // console.log('selection changed');
-                this.ignoreNextSelectionSet = true;
                 renderSelection(this.selection, this.getLines(), this.code);
             }
         }
@@ -871,34 +861,18 @@ export class AnycodeEditor {
         this.selection = new Selection(start, end);
         
         this.offset = end;
-        this.ignoreNextSelectionSet = true;
         renderSelection(this.selection, this.getLines(), this.code)
     }
     
     private selectLine(row: number) {
-        const line = this.code.line(row);
+        const lineLen = this.code.lineLength(row);
         const start = this.code.getOffset(row, 0);
-        const end   = this.code.getOffset(row, line.length);
+        const end = this.code.getOffset(row, lineLen);
     
         this.selection = new Selection(start, end);
     
         this.offset = end;
-        this.ignoreNextSelectionSet = true;
         renderSelection(this.selection, this.getLines(), this.code)
-    }
-    
-    private handleSelectionChange(e: Event) {
-        // if (this.ignoreNextSelectionSet) {
-        //     this.ignoreNextSelectionSet = false;
-        //     return;
-        // }
-
-        // const selection = getSelection();
-        // if (selection) {
-        //     const start = this.code.getOffset(selection.start.row, selection.start.col);
-        //     const end = this.code.getOffset(selection.end.row, selection.end.col);
-        //     this.selection = new Selection(start, end);
-        // }
     }
     
     private async handleKeydown(event: KeyboardEvent) {
@@ -1024,7 +998,6 @@ export class AnycodeEditor {
         } else if (selectionChanged) {
             // Only selection changed - render selection
             if (this.selection) {
-                this.ignoreNextSelectionSet = true;
                 renderSelection(this.selection, this.getLines(), this.code);
             } else {
                 this.updateCursor(true);
