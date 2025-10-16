@@ -50,6 +50,10 @@
   outline: none;
 }
 
+.anyeditor .code div {
+  line-height: 20px;
+}
+
 .has-error::after {
   content: attr(data-error);
   color: #ff6b6b;

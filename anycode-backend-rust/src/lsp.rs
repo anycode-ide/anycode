@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -62,7 +62,6 @@ impl Lsp {
 
         // spawn lsp process
         let mut child = Command::new(cmd)
-            
             .args(args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

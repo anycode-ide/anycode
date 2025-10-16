@@ -283,6 +283,40 @@ async function copyToClipboard(textToCopy: string) {
     }
 }
 
+export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (!text) return { ctx, changed: false };
+
+        return handlePasteText(ctx, text);
+    } catch (err) {
+        console.error('Failed to paste:', err);
+        return { ctx, changed: false };
+    }
+};
+
+export const handlePasteText = (ctx: ActionContext, text: string): ActionResult => {
+    let o = ctx.offset;
+
+    ctx.code.tx();
+    ctx.code.setStateBefore(ctx.offset, ctx.selection);
+
+    if (ctx.selection?.nonEmpty()) {
+        const [start, end] = ctx.selection!.sorted();
+        ctx.code.remove(start, end - start);
+        o = start;
+        ctx.selection = undefined;
+    }
+
+    const toInsert = smartPaste(ctx.code, o, text);
+    ctx.code.insert(toInsert, o);
+    ctx.offset = o + toInsert.length;
+    ctx.code.setStateAfter(ctx.offset, ctx.selection);
+    ctx.code.commit();
+
+    return { ctx, changed: true };
+};
+
 /**
  * Smart paste with indentation awareness.
  * 
@@ -358,35 +392,6 @@ export function smartPaste(code: Code, offset: number, text: string): string {
     return result.join('\n');
 }
 
-export const handlePaste = async (ctx: ActionContext): Promise<ActionResult> => {
-    try {
-        const text = await navigator.clipboard.readText();
-        if (!text) return { ctx, changed: false };
-
-        let o = ctx.offset;
-
-        ctx.code.tx();
-        ctx.code.setStateBefore(ctx.offset, ctx.selection);
-
-        if (ctx.selection?.nonEmpty()) {
-            const [start, end] = ctx.selection!.sorted();
-            ctx.code.remove(start, end - start);
-            o = start;
-            ctx.selection = undefined;
-        }
-
-        const toInsert = smartPaste(ctx.code, o, text);
-        ctx.code.insert(toInsert, o);
-        ctx.offset = o + toInsert.length;
-        ctx.code.setStateAfter(ctx.offset, ctx.selection);
-        ctx.code.commit();
-
-        return { ctx, changed: true };
-    } catch (err) {
-        console.error('Failed to paste:', err);
-        return { ctx, changed: false };
-    }
-};
 
 export const handleDuplicate = async (ctx: ActionContext): Promise<ActionResult> => {
     let start: number, end: number, textToDuplicate: string, insertPos: number, newOffset: number;
