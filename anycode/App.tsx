@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AnycodeEditorReact, AnycodeEditor, Edit, Operation } from 'anycode-react';
+import type { Change } from '../anycode-base/src/code';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
 import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } from './components';
@@ -69,7 +70,7 @@ const App: React.FC = () => {
     ): Promise<AnycodeEditor> => {
         const editor = new AnycodeEditor(content, filename, { language });
         await editor.init();
-        editor.setOnEdit((edit: Edit) => handleFileChange(filename, edit));
+        editor.setOnChange((change: Change) => handleChange(filename, change));
         editor.setCompletionProvider(handleCompletion);
         // Apply pending diagnostics for this file if any
         const pendingDiagnostics = diagnosticsRef.current.get(filename);
@@ -176,29 +177,25 @@ const App: React.FC = () => {
         }
     };
 
-    const handleFileChange = (filename: string, edit: Edit) => {
-        console.log('handleFileChange', filename, edit);
+    const handleChange = (filename: string, change: Change) => {
+        console.log('handleChange', filename, change);
 
         if (wsRef.current && isConnected) {
-            wsRef.current.emit("file:edit", { file: filename, ...edit});
+            wsRef.current.emit("file:change", { file: filename, ...change});
         }
-        
+
         const file = files.find(f => f.name === filename);
         if (!file) return;
 
-        const content = fileContentsRef.current.get(file.id) || file.content;
-        const newContent = applyEdit(content, edit);
-                
-        let isDirty = false;
-        if (newContent.length !== file.content.length) {
-            isDirty = true;
-        } else {
-            isDirty = newContent !== file.content;
+        let newContent = fileContentsRef.current.get(file.id) || file.content;
+        for (const edit of change.edits) {
+            newContent = applyEdit(newContent, edit);
         }
 
+        const isDirty = newContent !== file.content;
+
         fileContentsRef.current.set(file.id, newContent);
-        
-        // check if we need to update the dirty flag
+
         const currentDirtyFlag = dirtyFlagsRef.current.get(file.id);
         if (currentDirtyFlag !== isDirty) {
             console.log('setDirtyFlags', file.id, isDirty);
@@ -206,7 +203,6 @@ const App: React.FC = () => {
             setDirtyFlags(prev => new Map(prev).set(file.id, isDirty));
         }
 
-        // update length directly in DOM without re-renders
         if (activeFileId === file.id && lengthSpanRef.current) {
             requestAnimationFrame(() => {
                 lengthSpanRef.current!.textContent = newContent.length.toString();

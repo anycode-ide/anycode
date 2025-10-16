@@ -31,8 +31,8 @@ import c from './langs/c';
 import cpp from './langs/cpp';
 
 export enum Operation {
-    Insert = 0,
-    Remove = 1
+    Insert = "insert",
+    Remove = "remove"
 }
 
 export type Edit = {
@@ -46,7 +46,7 @@ export type EditState = {
     selection?: Selection;
 };
 
-export type Transaction = {
+export type Change = {
     edits: Edit[];
     stateBefore?: EditState;
     stateAfter?: EditState;
@@ -98,13 +98,13 @@ export class Code {
 
     private linesCache: Map<number, HighlighedNode[]> = new Map()
 
-    private history = new History<Transaction>()
-    private transactionActive: boolean = false;
-    private transactionEdits: Edit[] = [];
-    private transactionStateBefore?: EditState;
-    private transactionStateAfter?: EditState;
+    private history = new History<Change>()
+    private changeActive: boolean = false;
+    private changeEdits: Edit[] = [];
+    private changeStateBefore?: EditState;
+    private changeStateAfter?: EditState;
 
-    private onEdit: ((e: Edit) => void) | null = null
+    private onChange: ((t: Change) => void) | null = null
 
     private injection_parsers: Map<string, Parser> = new Map()
     private injection_queries: Map<string, Parser.Query> = new Map()
@@ -288,8 +288,8 @@ export class Code {
         return v;
     }
 
-    public setOnEdit(onEdit: (e: Edit) => void ) {
-        this.onEdit = onEdit;
+    public setOnChange(onTx: (t: Change) => void ) {
+        this.onChange = onTx;
     }
 
     public getOffset(line: number, column: number): number {
@@ -350,17 +350,15 @@ export class Code {
         };
 
         if (addHistory) {
-            let transaction = { edits: [edit] } as Transaction;
-            this.recordTransaction(transaction);
+            this.recordChange({ edits: [edit] });
         }
 
-        if (this.transactionActive) {
-            this.transactionEdits.push(edit);
+        if (this.changeActive) {
+            this.changeEdits.push(edit);
         }
 
         this.buffer.insert(offset, text);
         if (this.tree) this.treeSitterInsert(text, offset);
-        if (this.onEdit) this.onEdit(edit);
 
         this.linesCache.clear();
     }
@@ -389,21 +387,18 @@ export class Code {
         };
 
         if (addHistory) {
-            let transaction = { edits: [edit] } as Transaction;
-            this.recordTransaction(transaction);
+            this.recordChange({ edits: [edit] });
         }
 
-        if (this.transactionActive) {
-            this.transactionEdits.push(edit);
+        if (this.changeActive) {
+            this.changeEdits.push(edit);
         }
 
         this.buffer.delete(offset, length);
         if (this.tree) this.treeSitterRemove(offset + length, length);
-        if (this.onEdit) this.onEdit(edit);
 
         this.linesCache.clear();
     }
-
 
     treeSitterInsert(text: string, offset: number) {
         let len = text.length;
@@ -463,14 +458,13 @@ export class Code {
 
         this.linesCache.clear();
 
-        if (this.onEdit) this.onEdit(edit);
     }
 
-    public applyTransaction(transaction: Transaction, addHistory: boolean = false): void {
+    public applyChange(change: Change, addHistory: boolean = false): void {
         const applied: Edit[] = [];
 
         try {
-            for (const edit of transaction.edits) {
+            for (const edit of change.edits) {
                 const inverseEdit: Edit = {
                     operation: edit.operation === Operation.Insert ?
                         Operation.Remove : Operation.Insert,
@@ -482,8 +476,10 @@ export class Code {
             }
 
             if (addHistory) {
-                this.recordTransaction(transaction);
+                this.recordChange(change);
             }
+
+            if (this.onChange) this.onChange(change);
 
             this.linesCache.clear();
         } catch (err) {
@@ -498,45 +494,47 @@ export class Code {
     }
     
     tx() {
-        this.transactionActive = true;
-        this.transactionEdits = [];
+        this.changeActive = true;
+        this.changeEdits = [];
     }
 
     setStateBefore(offset: number, selection?: Selection) {
-        this.transactionStateBefore = { offset, selection: selection?.clone() };
+        this.changeStateBefore = { offset, selection: selection?.clone() };
     }
 
     setStateAfter(offset: number, selection?: Selection) {
-        this.transactionStateAfter = { offset, selection: selection?.clone() };
+        this.changeStateAfter = { offset, selection: selection?.clone() };
     }
 
     commit() {
-        if (this.transactionActive) {
-            let transaction = { 
-                edits: this.transactionEdits, 
-                stateBefore:  this.transactionStateBefore,
-                stateAfter:  this.transactionStateAfter,
-            } as Transaction;
+        if (this.changeActive) {
+            let change = { 
+                edits: this.changeEdits, 
+                stateBefore:  this.changeStateBefore,
+                stateAfter:  this.changeStateAfter,
+            } as Change;
 
-            this.recordTransaction(transaction);
+            this.recordChange(change);
 
-            this.transactionActive = false;
-            this.transactionEdits = [];
-            this.transactionStateAfter = undefined;
-            this.transactionStateBefore = undefined;
+            if (this.onChange) this.onChange(change);
+
+            this.changeActive = false;
+            this.changeEdits = [];
+            this.changeStateAfter = undefined;
+            this.changeStateBefore = undefined;
         } else {
-            console.error('No active transaction to commit');
+            console.error('No active changes to commit');
         }
     }
 
-    private recordTransaction(transaction: Transaction) {
-        this.history.push(transaction);
+    private recordChange(change: Change) {
+        this.history.push(change);
     }
 
-    public undo(): Transaction | undefined {
-        const transaction = this.history.undo();
-        if (!transaction) return undefined;
-        const edits = [...transaction.edits].reverse();
+    public undo(): Change | undefined {
+        const change = this.history.undo();
+        if (!change) return undefined;
+        const edits = [...change.edits].reverse();
 
         for (const edit of edits) {
             if (edit.operation === Operation.Insert) {
@@ -545,13 +543,13 @@ export class Code {
                 this.insert(edit.text, edit.start);
             }
         }
-        return transaction;
+        return change;
     }
 
-    public redo(): Transaction | null {
-        const transaction = this.history.redo();
-        if (!transaction) return null;
-        const edits = transaction.edits;
+    public redo(): Change | null {
+        const change = this.history.redo();
+        if (!change) return null;
+        const edits = change.edits;
 
         for (const edit of edits) {
             if (edit.operation === Operation.Insert) {
@@ -560,7 +558,7 @@ export class Code {
                 this.remove(edit.start, edit.text.length);
             }
         }
-        return transaction;
+        return change;
     }
 
     getLang(lang: string): Lang | null {

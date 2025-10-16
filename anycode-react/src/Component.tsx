@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { AnycodeEditor, Edit } from 'anycode-base';
+import { AnycodeEditor } from 'anycode-base';
 
 interface AnycodeEditorProps {
     id: string;

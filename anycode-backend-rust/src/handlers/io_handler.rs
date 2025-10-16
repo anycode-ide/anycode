@@ -147,71 +147,87 @@ pub async fn handle_file_close(
     data.opened_files.remove(&abs_path);
 }
 
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FileEdit {
-    pub file: String,
-    pub operation: usize, // 0 insert, 1 remove
+#[serde(rename_all = "lowercase")]
+pub enum Operation {
+    Insert,
+    Remove,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Edit {
+    pub operation: Operation,
     pub start: usize,
     pub text: String,
 }
 
-pub async fn handle_file_edit(
-    socket: SocketRef,
-    Data(edit): Data<FileEdit>,
-    state: State<AppState>,
-    ack: AckSender,
-) {
-    info!("Received file:edit: {:?}", edit);
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Change {
+    pub file: String,
+    pub edits: Vec<Edit>,
+}
 
-    let abs_path = match abs_file(&edit.file) {
+pub async fn handle_change(
+    socket: SocketRef,
+    Data(change): Data<Change>,
+    state: State<AppState>,
+    _ack: AckSender,
+) {
+    info!("Received file:change: edits={} file={}", change.edits.len(), change.file);
+
+    let abs_path = match abs_file(&change.file) {
         Ok(p) => p,
-        Err(e) => error_ack!(ack, &edit.file, "Failed to resolve file: {:?}", e),
+        Err(e) => {
+            tracing::error!("Failed to resolve file: {:?}", e);
+            return;
+        }
     };
 
     let mut f2c = state.file2code.lock().await;
     let code = match get_or_create_code(&mut f2c, &abs_path, &state.config) {
         Ok(c) => c,
-        Err(e) => error_ack!(ack, &abs_path, "{:?}", e),
+        Err(e) => {
+            tracing::error!("Failed to get code: {:?}", e);
+            return;
+        }
     };
 
     let mut lsp_manager = state.lsp_manager.lock().await;
 
-    match edit.operation {
-        0 /* insert */ => {
-            // incoming start is assumed to be UTF-16 code units from client
-            let start_char = code.utf16_to_char_offset(edit.start);
-            let (line, col_utf16) = code.char_to_position(start_char);
-            code.insert_text_at(&edit.text, start_char);
+    for e in change.edits.iter() {
+        match e.operation {
+            Operation::Insert => {
+                let start_char = code.utf16_to_char_offset(e.start);
+                let (line, col_utf16) = code.char_to_position(start_char);
+                code.insert_text_at(&e.text, start_char);
 
-            if let Some(lsp) = lsp_manager.get(&code.lang).await {
-                lsp.did_change(
-                    line, col_utf16, line, col_utf16,
-                    &abs_path, &edit.text
-                ).await;
+                if let Some(lsp) = lsp_manager.get(&code.lang).await {
+                    lsp.did_change(line, col_utf16, line, col_utf16, &abs_path, &e.text).await;
+                }
             }
-        }
-        1 /* remove */ => {
-            // incoming start and text length are in UTF-16 units from client
-            let start_char = code.utf16_to_char_offset(edit.start);
-            let end_char = code.utf16_to_char_offset(edit.start + edit.text.encode_utf16().count());
-            let (start_line, start_col_utf16) = code.char_to_position(start_char);
-            let (end_line, end_col_utf16) = code.char_to_position(end_char);
-            
-            code.remove_text2(start_char, end_char);
+            Operation::Remove => {
+                let start_char = code.utf16_to_char_offset(e.start);
+                let end_char = code.utf16_to_char_offset(e.start + e.text.encode_utf16().count());
+                let (start_line, start_col_utf16) = code.char_to_position(start_char);
+                let (end_line, end_col_utf16) = code.char_to_position(end_char);
 
-            if let Some(lsp) = lsp_manager.get(&code.lang).await {
-                lsp.did_change(
-                    start_line, start_col_utf16, end_line, end_col_utf16,
-                    &abs_path, ""
-                ).await;
+                code.remove_text2(start_char, end_char);
+
+                if let Some(lsp) = lsp_manager.get(&code.lang).await {
+                    lsp.did_change(
+                        start_line, start_col_utf16,
+                        end_line, end_col_utf16,
+                        &abs_path, "",
+                    )
+                    .await;
+                }
             }
-        }
-        _ => {
-            error!("Unknown edit operation: {}", edit.operation);
         }
     }
 
-    socket.broadcast().emit("file:edit", &edit).await.ok();
+    // Broadcast as a single message for other clients if needed
+    socket.broadcast().emit("file:change", &change).await.ok();
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

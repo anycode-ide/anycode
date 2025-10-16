@@ -1,4 +1,4 @@
-import type { Code } from "./code";
+import { Operation, type Code } from "./code";
 import { Selection } from "./selection";
 import { getIndentation, getPrevGraphemeIndex, getNextGraphemeIndex } from "./utils";
 
@@ -183,19 +183,19 @@ export const handleEnter = (ctx: ActionContext): ActionResult => {
 };
 
 export const handleUndo = (ctx: ActionContext): ActionResult => {
-    const transaction = ctx.code.undo();
+    const change = ctx.code.undo();
 
-    if (transaction) {
-        if (transaction.stateBefore) { 
+    if (change) {
+        if (change.stateBefore) { 
             // use state before to restore cursor and selection
-            ctx.offset = transaction.stateBefore.offset;
-            ctx.selection = transaction.stateBefore.selection;
+            ctx.offset = change.stateBefore.offset;
+            ctx.selection = change.stateBefore.selection;
         } else {
             // calculate new cursor position
-            for (const edit of transaction.edits) {
-                if (edit.operation === 0) {
+            for (const edit of change.edits) {
+                if (edit.operation === Operation.Insert) {
                     ctx.offset = edit.start;
-                } else if (edit.operation === 1) {
+                } else if (edit.operation === Operation.Remove) {
                     ctx.offset = edit.start + edit.text.length;
                 }
             }
@@ -208,19 +208,19 @@ export const handleUndo = (ctx: ActionContext): ActionResult => {
 };
 
 export const handleRedo = (ctx: ActionContext): ActionResult => {
-    const transaction = ctx.code.redo();
+    const change = ctx.code.redo();
 
-    if (transaction) {
-        if (transaction.stateAfter) {
+    if (change) {
+        if (change.stateAfter) {
             // use state after to restore cursor and selection
-            ctx.offset = transaction.stateAfter.offset;
-            ctx.selection = transaction.stateAfter.selection;
+            ctx.offset = change.stateAfter.offset;
+            ctx.selection = change.stateAfter.selection;
         } else {
             // calculate new cursor position
-            for (const edit of transaction.edits) {
-                if (edit.operation === 0) {
+            for (const edit of change.edits) {
+                if (edit.operation === Operation.Insert) {
                     ctx.offset = edit.start + edit.text.length;
-                } else if (edit.operation === 1) {
+                } else if (edit.operation === Operation.Remove) {
                     ctx.offset = edit.start;
                 }
             }

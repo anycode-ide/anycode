@@ -1,2 +1,2 @@
 export { AnycodeEditor } from './editor';
-export { type Edit, Operation } from './code';
+export { type Edit, type Change, Operation } from './code';

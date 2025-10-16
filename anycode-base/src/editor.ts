@@ -1,4 +1,4 @@
-import { Code, Edit } from "./code";
+import { Code, Edit, Change } from "./code";
 import { vesper } from './theme';
 import { Renderer } from './renderer';
 import { getPosFromMouse } from './mouse';
@@ -102,8 +102,8 @@ export class AnycodeEditor {
         }
     }
 
-    public setOnEdit(onEdit: (e: Edit) => void ) {
-        this.code.setOnEdit(onEdit);
+    public setOnChange(func: (t: Change) => void ) {
+        this.code.setOnChange(func);
     }
     
     public setText(newText: string) {
@@ -694,10 +694,8 @@ export class AnycodeEditor {
         
         let lineStr = this.code.line(line);
         
-        // Determine the range to replace using the helper function
         let { start: replaceStart, end: replaceEnd } = getCompletionRange(lineStr, column);
 
-        // Start transaction and perform replacement
         this.code.tx();
         this.code.setStateBefore(this.offset, this.selection || undefined);
         let startOffset = this.code.getOffset(line, replaceStart);

@@ -53,7 +53,7 @@ async fn on_connect(socket: SocketRef, state: State<AppState>) {
 
     socket.on("file:open", handle_file_open);
     socket.on("dir:list", handle_dir_list);
-    socket.on("file:edit", handle_file_edit);
+    socket.on("file:change", handle_change);
     socket.on("file:save", handle_file_save);
     socket.on("file:set", handle_file_set);
     socket.on("file:create", handle_create);

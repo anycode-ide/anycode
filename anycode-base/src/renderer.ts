@@ -327,7 +327,7 @@ export class Renderer {
 
         wrapper.lineNumber = lineNumber;
         wrapper.className = "line";
-        // wrapper.style.lineHeight = `${settings.lineHeight}px`;
+        wrapper.style.lineHeight = `${settings.lineHeight}px`;
 
         // Add hash for change tracking
         const hash = objectHash(nodes).toString();
