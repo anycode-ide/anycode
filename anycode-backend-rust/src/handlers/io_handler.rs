@@ -117,17 +117,22 @@ pub async fn handle_dir_list(
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileCloseRequest {
+    pub file: String,
+}
+
 pub async fn handle_file_close(
     socket: SocketRef,
-    Data(file): Data<String>,
+    Data(request): Data<FileCloseRequest>,
     state: State<AppState>,
     ack: AckSender,
 ) {
-    info!("Received file:close: {:?}", file);
+    info!("Received file:close: {:?}", request);
 
-    let abs_path = match abs_file(&file) {
+    let abs_path = match abs_file(&request.file) {
         Ok(p) => p,
-        Err(e) => error_ack!(ack, &file, "Failed to resolve file: {:?}", e),
+        Err(e) => error_ack!(ack, &request, "Failed to resolve file: {:?}", e),
     };
 
     let mut f2c = state.file2code.lock().await;

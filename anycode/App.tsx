@@ -211,6 +211,10 @@ const App: React.FC = () => {
     };
 
     const closeFile = (fileId: string) => {
+        if (wsRef.current && isConnected) {
+            wsRef.current.emit("file:close", { file: fileId });
+        }
+
         // find file before deleting to unselect it in the tree
         const fileToClose = files.find(f => f.id === fileId);
         
