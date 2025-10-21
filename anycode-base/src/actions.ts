@@ -29,6 +29,7 @@ export enum Action {
     CUT = 'CUT',
     DUPLICATE = 'DUPLICATE',
     COMMENT = 'COMMENT',
+    GO_TO_DEFINITION = 'GO_TO_DEFINITION',
 }
 
 export type ActionContext = {

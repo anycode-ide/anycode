@@ -460,6 +460,26 @@ export class Renderer {
         return false;
     }
 
+    public focusCenter(state: EditorState): boolean {
+        const { code, offset, settings } = state;
+        if (!code) return false;
+    
+        const { line } = code.getPosition(offset);
+    
+        const cursorTop = line * settings.lineHeight;
+        const cursorCenter = cursorTop + settings.lineHeight / 2;
+    
+        const viewportHeight = this.container.clientHeight;
+        const targetScrollTop = cursorCenter - viewportHeight / 2;
+    
+        const maxScroll = this.container.scrollHeight - viewportHeight;
+        const clampedScrollTop = Math.max(0, Math.min(targetScrollTop, maxScroll));
+    
+        this.container.scrollTo({ top: clampedScrollTop });
+    
+        return true;
+    }
+
     public renderErrors(errorLines: Map<number, string>) {
         console.time('renderErrors');  
 

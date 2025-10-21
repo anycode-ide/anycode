@@ -3,7 +3,7 @@ import { vesper } from './theme';
 import { Renderer } from './renderer';
 import { getPosFromMouse } from './mouse';
 import { Selection } from "./selection";
-import { Completion, CompletionRequest } from "./lsp";
+import { Completion, CompletionRequest, DefinitionRequest, DefinitionResponse } from "./lsp";
 import {
     Action, ActionContext, ActionResult, 
     executeAction, handlePasteText,
@@ -55,11 +55,26 @@ export class AnycodeEditor {
     private selectedCompletionIndex = 0;
     private completions: Completion[] = [];
     private completionProvider: ((request: CompletionRequest) => Promise<Completion[]>) | null = null;
+    private goToDefinitionProvider: ((request: DefinitionRequest) => Promise<DefinitionResponse>) | null = null;
 
-    constructor(initialText = '', filename: string = 'test.txt', options: any = {}) {
-        this.offset = 0;
-        const language = options.language || "javascript";
+    private needFocus = false;
+
+    constructor(
+        initialText = '', 
+        filename: string = 'test.txt', 
+        language: string = 'javascript', 
+        options: any = {}
+    ) {
         this.code = new Code(initialText, filename, language);
+        
+        // Set initial cursor position
+        if (options.line !== undefined && options.column !== undefined) {
+            this.offset = this.code.getOffset(options.line, options.column);
+            this.needFocus = true;
+        } else {
+            this.offset = 0;
+        }
+        
         this.settings = { lineHeight: 20, buffer: 30 };
         
         const theme = options.theme || vesper;
@@ -123,6 +138,32 @@ export class AnycodeEditor {
         return this.container;
     }
 
+    public getCursor(): { line: number, column: number } {
+        return this.code.getPosition(this.offset);
+    }
+
+    public setCursor(line: number, column: number): void {
+        const offset = this.code.getOffset(line, column);
+        this.offset = offset;
+        this.renderer.renderCursor(line, column);
+    }
+
+    public requestFocus(line: number, column: number, center: boolean = false): void {
+        this.needFocus = true;
+        const offset = this.code.getOffset(line, column);
+        this.offset = offset;
+        this.codeContent.focus();
+
+        if (center) this.renderer.focusCenter(this.getEditorState());
+        else this.renderer.focus(this.getEditorState());
+
+        this.renderer.renderCursorOrSelection(this.getEditorState());
+    }
+
+    public requestedFocus(): boolean {
+        return this.needFocus;
+    }
+
     public setRunButtonLines(lines: number[]) {
         this.runLines = lines;
     }
@@ -143,6 +184,12 @@ export class AnycodeEditor {
         completionProvider: (request: CompletionRequest) => Promise<Completion[]>
     ) {
         this.completionProvider = completionProvider;
+    }
+
+    public setGoToDefinitionProvider(
+        goToDefinitionProvider: (request: DefinitionRequest) => Promise<DefinitionResponse>
+    ) {
+        this.goToDefinitionProvider = goToDefinitionProvider;
     }
 
     private setupEventListeners() {        
@@ -194,6 +241,7 @@ export class AnycodeEditor {
                 this.renderer.renderScroll(state);
                 this.lastScrollTop = scrollTop;
             }
+            this.needFocus = false
         });
     }
 
@@ -247,6 +295,30 @@ export class AnycodeEditor {
         if (this.isCompletionOpen){
             this.renderer.closeCompletion();
             this.isCompletionOpen = false;
+        }
+
+        // Handle Ctrl+Click for go to definition
+        if (e.metaKey || e.ctrlKey) {
+            this.goToDefinition(pos.row, pos.col).catch(console.error);
+        }
+    }
+
+    private async goToDefinition(row: number, col: number): Promise<void> {
+        if (!this.goToDefinitionProvider) {
+            console.warn('Go to definition provider not set');
+            return;
+        }
+
+        try {
+            const definitionRequest: DefinitionRequest = {
+                file: this.code.filename,
+                row: row,
+                column: col
+            };
+
+            await this.goToDefinitionProvider(definitionRequest);
+        } catch (error) {
+            console.error('Failed to get definition:', error);
         }
     }
     
@@ -473,6 +545,14 @@ export class AnycodeEditor {
             return;
         }
 
+        // Special-case go to definition: handle directly
+        if (action === Action.GO_TO_DEFINITION) {
+            event.preventDefault();
+            const { line, column } = this.code.getPosition(this.offset);
+            this.goToDefinition(line, column).catch(console.error);
+            return;
+        }
+
         event.preventDefault();
         
         const ctx: ActionContext = {
@@ -537,6 +617,7 @@ export class AnycodeEditor {
             case "Enter": return Action.ENTER;
             case "Tab": return Action.TAB;
             case "Escape": return Action.ESC;
+            case "F12": return Action.GO_TO_DEFINITION;
         }
         
         // Text input

@@ -47,13 +47,17 @@ export interface Reference {
 
 // === Definition ===
 export interface DefinitionRequest {
+    file: string;
     row: number;
     column: number;
 }
 
 export interface DefinitionResponse {
-    row: number;
-    column: number;
+    uri: string;
+    range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+    };
 }
 
 // === Diagnostics ===

@@ -7,7 +7,10 @@ import 'allotment/dist/style.css';
 import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } from './components';
 import { DEFAULT_FILE, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
 import './App.css';
-import { Completion, CompletionRequest, Diagnostic, DiagnosticResponse } from '../anycode-base/src/lsp';
+import { 
+    Completion, CompletionRequest, Diagnostic, DiagnosticResponse, 
+    DefinitionRequest, DefinitionResponse 
+} from '../anycode-base/src/lsp';
 
 const App: React.FC = () => {
     console.log('App rendered');
@@ -21,6 +24,7 @@ const App: React.FC = () => {
     const [editorStates, setEditorStates] = useState<Map<string, AnycodeEditor>>(new Map());
     const editorRefs = useRef<Map<string, AnycodeEditor>>(new Map());
     const diagnosticsRef = useRef<Map<string, Diagnostic[]>>(new Map());
+    const pendingPositions = useRef<Map<string, { line: number; column: number }>>(new Map());
     const activeFile = files.find(f => f.id === activeFileId);
     const lengthSpanRef = useRef<HTMLSpanElement>(null);
     
@@ -42,14 +46,11 @@ const App: React.FC = () => {
     const wsRef = useRef<Socket | null>(null);
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttemptsRef = useRef<number>(0);
-    const reconnectDelay = 1000; // 1 second
+    const reconnectDelay = 1000;
 
-    // Keep latest files in a ref to avoid stale closures in socket handlers
     useEffect(() => {
         filesRef.current = files;
     }, [files]);
-
-    // (diagnosticsState) no longer used: we apply diagnostics directly via editorRefs
 
     const handleLeftPanelVisibleChange = (index: number, visible: boolean) => {
         console.log('handleLeftPanelVisibleChange', index, visible);
@@ -66,18 +67,25 @@ const App: React.FC = () => {
     };
 
     const createEditor = async (
-        content: string, language: string, filename: string
+        content: string, 
+        language: string, 
+        filename: string, 
+        initialPosition?: { line: number; column: number },
+        errors?: { line: number; message: string }[]
     ): Promise<AnycodeEditor> => {
-        const editor = new AnycodeEditor(content, filename, { language });
+        const options: any = {};
+        if (initialPosition) {
+            options.line = initialPosition.line;
+            options.column = initialPosition.column;
+        }
+        
+        const editor = new AnycodeEditor(content, filename, language, options);
         await editor.init();
         editor.setOnChange((change: Change) => handleChange(filename, change));
         editor.setCompletionProvider(handleCompletion);
-        // Apply pending diagnostics for this file if any
-        const pendingDiagnostics = diagnosticsRef.current.get(filename);
-        if (pendingDiagnostics && pendingDiagnostics.length > 0) {
-            const errors = pendingDiagnostics.map(d => ({ line: d.range.start.line, message: d.message }));
-            editor.setErrors(errors);
-        }
+        editor.setGoToDefinitionProvider(handleGoToDefinition);
+        editor.setErrors(errors || []);
+        
         return editor;
     };
 
@@ -89,10 +97,15 @@ const App: React.FC = () => {
                 for (const file of files) {
                     if (!editorStates.has(file.id)) {
                         // create editor if it doesn't exist
-                        const editor = await createEditor(file.content, file.language, file.id);
+                        const pendingPosition = pendingPositions.current.get(file.id);
+                        const pendingDiagnostics = diagnosticsRef.current.get(file.id);
+                        const errors = pendingDiagnostics ? pendingDiagnostics.map(d => ({ line: d.range.start.line, message: d.message })) : undefined;
+                        const editor = await createEditor(file.content, file.language, file.id, pendingPosition, errors);
                         newEditorStates.set(file.id, editor);
                         fileContentsRef.current.set(file.id, file.content);
                         editorRefs.current.set(file.id, editor);
+                        
+                        if (pendingPosition) pendingPositions.current.delete(file.id);
                     } else {
                         // if editor already exists, just use it
                         const existing = editorStates.get(file.id)!;
@@ -620,6 +633,56 @@ const App: React.FC = () => {
         });
     };
 
+    const handleGoToDefinition = (definitionRequest: DefinitionRequest): Promise<DefinitionResponse> => {
+        return new Promise((resolve, reject) => {
+            console.log('handleGoToDefinition', definitionRequest);
+            
+            if (!wsRef.current) {
+                console.error('WebSocket not connected');
+                reject(new Error('WebSocket not connected'));
+                return;
+            }
+
+            wsRef.current.emit("lsp:definition", definitionRequest, (response: any) => {
+                console.log("definition response", response);
+
+                if (response.error) {
+                    console.error('Failed to get definition:', response.error);
+                    reject(new Error(response.error));
+                    return;
+                }
+
+                if (response && response.length > 0) {
+                    const definition = response[0];
+                    const uri = definition.uri;
+                    const range = definition.range;
+                    const line = range.start.line; const column = range.start.character;
+                    
+                    const filePath = uri.replace('file://', '');
+                    const fileName = filePath.split('/').pop() || '';
+
+                    pendingPositions.current.set(filePath, { line, column });
+                    
+                    const existingFile = filesRef.current.find(f => f.id === filePath || f.name === fileName);
+                    if (existingFile) {
+                        setActiveFileId(existingFile.id);
+                        const editor = editorRefs.current.get(existingFile.id);
+                        if (editor) {
+                            editor.requestFocus(line, column);
+                        }
+                    } else {                    
+                        console.log('Opening new file:', filePath);
+                        openFile(filePath);
+                    }
+                    
+                    resolve(definition);
+                } else {
+                    reject(new Error('No definition found'));
+                }
+            });
+        });
+    };
+
     useEffect(() => {
         const file = files.find(f => f.id === activeFileId);
         if (file) {
@@ -701,6 +764,7 @@ const App: React.FC = () => {
                                             key={activeFile.id}
                                             id={activeFile.id}
                                             editorState={editorStates.get(activeFile.id)!}
+                                            // focus={pendingPositions.current.has(activeFile.id)}
                                         />
                                     ) : (
                                         <div className="no-editor">

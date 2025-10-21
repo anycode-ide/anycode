@@ -1,6 +1,6 @@
 export default class History<T> {
     private index = 0;
-    private edits: T[] = [];
+    private items: T[] = [];
     private readonly maxItems: number;
 
     constructor(maxItems: number = 10000) {
@@ -8,34 +8,34 @@ export default class History<T> {
     }
 
     push(item: T): void {
-        while (this.edits.length > this.index) {
-            this.edits.pop();
+        while (this.items.length > this.index) {
+            this.items.pop();
         }
 
-        if (this.edits.length === this.maxItems) {
-            this.edits.shift();
+        if (this.items.length === this.maxItems) {
+            this.items.shift();
             if (this.index > 0) this.index--;
         }
 
-        this.edits.push(item);
+        this.items.push(item);
         this.index++;
     }
 
     undo(): T | undefined {
         if (this.index === 0) return undefined;
         this.index--;
-        return this.edits[this.index];
+        return this.items[this.index];
     }
 
     redo(): T | undefined {
-        if (this.index >= this.edits.length) return undefined;
-        const item = this.edits[this.index];
+        if (this.index >= this.items.length) return undefined;
+        const item = this.items[this.index];
         this.index++;
         return item;
     }
 
     current(): T | undefined {
-        return this.edits[this.index - 1];
+        return this.items[this.index - 1];
     }
 
     canUndo(): boolean {
@@ -43,19 +43,15 @@ export default class History<T> {
     }
 
     canRedo(): boolean {
-        return this.index < this.edits.length;
+        return this.index < this.items.length;
     }
 
     size(): number {
-        return this.edits.length;
+        return this.items.length;
     }
 
     clear(): void {
-        this.edits = [];
+        this.items = [];
         this.index = 0;
     }
 }
-
-
-
-
