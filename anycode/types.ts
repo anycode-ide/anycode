@@ -54,3 +54,13 @@ export interface TerminalResizePayload {
 export interface TerminalDataPayload {
     content: string;
 }
+
+export interface Cursor {
+    line: number;
+    column: number;
+}
+
+export interface CursorHistory {
+    undoStack: Array<{ file: string; cursor: Cursor }>;
+    redoStack: Array<{ file: string; cursor: Cursor }>;
+}

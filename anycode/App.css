@@ -6,7 +6,7 @@
 }
 
 .app-container {
-    height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -19,24 +19,19 @@
 
 .tab-bar {
     display: flex;
-    /* background-color: #2d2d2d; */
-    /* border-bottom: 1px solid #444; */
-    overflow-x: scroll;   /* скролл есть */
-    scrollbar-width: none; /* для Firefox */
-    -ms-overflow-style: none; /* для IE и Edge */    height: 100%;
+    overflow-x: scroll;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    height: 100%;
     overflow-y: hidden;
-    /* min-height: 40px; */
+    min-width: 200px;
 }
 
 .tab {
     display: flex;
     align-items: center;
-    /* padding: 8px 16px; */
-    /* background-color: #2d2d2d; */
     color: #ccc;
     cursor: pointer;
-    /* border-right: 1px solid #444; */
-    /* min-width: 120px; */
     position: relative;
     white-space: nowrap;
 }
@@ -134,6 +129,7 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     height: var(--toolbar-height);
     border: 1px solid rgb(70, 70, 70);
+    overflow-y: scroll;
 }
 
 /* .toolbar::after {
@@ -191,7 +187,6 @@
     border: none;
     color: #888;
     cursor: pointer;
-    padding: 1px 12px; 
     border-radius: 12px;
     font-weight: bold;
     transition: all 0.2s ease;
@@ -213,7 +208,6 @@
     border: none;
     color: #888;
     cursor: pointer;
-    padding: 1px 12px; 
     border-radius: 12px;
     transition: all 0.2s ease;
     font-weight: bold;

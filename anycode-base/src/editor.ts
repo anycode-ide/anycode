@@ -1,4 +1,4 @@
-import { Code, Edit, Change } from "./code";
+import { Code, Edit, Change, Position } from "./code";
 import { vesper } from './theme';
 import { Renderer } from './renderer';
 import { getPosFromMouse } from './mouse';
@@ -13,6 +13,7 @@ import {
     findPrevWord, findNextWord, 
     getCompletionRange, scoreMatches
 } from './utils';
+
 import './styles.css';
 
 export interface EditorSettings {
@@ -56,6 +57,7 @@ export class AnycodeEditor {
     private completions: Completion[] = [];
     private completionProvider: ((request: CompletionRequest) => Promise<Completion[]>) | null = null;
     private goToDefinitionProvider: ((request: DefinitionRequest) => Promise<DefinitionResponse>) | null = null;
+    private onCursorChangeCallback: ((newCursor: Position, oldCursor: Position) => void) | null = null;
 
     private needFocus = false;
 
@@ -66,6 +68,7 @@ export class AnycodeEditor {
         options: any = {}
     ) {
         this.code = new Code(initialText, filename, language);
+        console.log("code constructor, options", options);
         
         // Set initial cursor position
         if (options.line !== undefined && options.column !== undefined) {
@@ -82,6 +85,7 @@ export class AnycodeEditor {
         addCssToDocument(css, 'anyeditor-theme');
         this.createDomElements();
         this.renderer = new Renderer(this.container, this.buttonsColumn, this.gutter, this.codeContent);
+        console.log("code constructor, this.offset", this.offset);
     }
     
     private createDomElements() {
@@ -192,6 +196,10 @@ export class AnycodeEditor {
         this.goToDefinitionProvider = goToDefinitionProvider;
     }
 
+    public setOnCursorChange(callback: (newState: Position, oldState: Position) => void) {
+        this.onCursorChangeCallback = callback;
+    }
+
     private setupEventListeners() {        
         this.handleScroll = this.handleScroll.bind(this);
         this.container.addEventListener("scroll", this.handleScroll);
@@ -276,28 +284,33 @@ export class AnycodeEditor {
     }
     
     private handleClick(e: MouseEvent): void {
-        // console.log("handleClick ", this.selection);
-        if (this.selection && this.selection.nonEmpty()) {
-            return;
-        }
+        const oldCursor = this.code.getPosition(this.offset);
+
+        if (this.selection && this.selection.nonEmpty()) { return; }
         
         e.preventDefault();
         
         const pos = getPosFromMouse(e);
-        if (!pos) return;
-    
+        if (!pos) { return; }
+
+
         const o = this.code.getOffset(pos.row, pos.col);
+        if (o == this.offset) { return; }
+
         this.offset = o;
         
         const { line, column } = this.code.getPosition(this.offset);
         this.renderer.renderCursor(line, column);
+
+        if (this.onCursorChangeCallback) {
+            this.onCursorChangeCallback({ line, column }, oldCursor);
+        }
 
         if (this.isCompletionOpen){
             this.renderer.closeCompletion();
             this.isCompletionOpen = false;
         }
 
-        // Handle Ctrl+Click for go to definition
         if (e.metaKey || e.ctrlKey) {
             this.goToDefinition(pos.row, pos.col).catch(console.error);
         }
@@ -380,14 +393,13 @@ export class AnycodeEditor {
         }
     }
     
-    private handleMouseMove(e: MouseEvent) {
+    private handleMouseMove(e: MouseEvent) {        
         e.preventDefault();
         if (!this.isMouseSelecting) return;
         
         this.autoScroll(e);
         
         let pos = getPosFromMouse(e);
-        // console.log('handleMouseMove', pos);
 
         let oldSelection = this.selection?.clone();
         
@@ -442,7 +454,6 @@ export class AnycodeEditor {
             } else {
                 // Standard selection mode — update the cursor directly
                 this.selection.updateCursor(currentOffset);
-                this.offset = currentOffset;
             }
             
             if (oldSelection && !oldSelection.equals(this.selection)) {
@@ -509,6 +520,7 @@ export class AnycodeEditor {
         this.selection = new Selection(start, end);
         
         this.offset = end;
+        console.log('selectWord', end);
         this.renderer.renderSelection(this.code, this.selection);
     }
     
@@ -520,6 +532,7 @@ export class AnycodeEditor {
         this.selection = new Selection(start, end);
     
         this.offset = end;
+        console.log('selectLine', end);
         this.renderer.renderSelection(this.code, this.selection);
     }
     

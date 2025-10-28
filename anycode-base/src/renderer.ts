@@ -333,10 +333,8 @@ export class Renderer {
         const hash = objectHash(nodes).toString();
         wrapper.hash = hash;
 
-        if (nodes.length === 0 || (nodes.length === 1 && nodes[0].text === "")) {
-            const span = document.createElement('span');
-            span.textContent = "";
-            wrapper.appendChild(span);
+        if (nodes.length === 0 || (nodes.length === 1 && nodes[0].text === "\u200B")) {
+            wrapper.appendChild(document.createElement('br'));
         } else {
             for (const { name, text } of nodes) {
                 const span = document.createElement('span');
@@ -404,6 +402,8 @@ export class Renderer {
     }
 
     public renderSelection(code: Code, selection: Selection) {
+        if (selection.isEmpty()) return;
+        
         const lines = this.getLines();
         let attached = true;
         for (const l of lines) {
@@ -481,8 +481,6 @@ export class Renderer {
     }
 
     public renderErrors(errorLines: Map<number, string>) {
-        console.time('renderErrors');  
-
         const lines = this.getLines();
         if (!lines.length) return;
             
@@ -505,7 +503,6 @@ export class Renderer {
                 }
             }
         }
-        console.timeEnd('renderErrors');
     }
 
     public renderCompletion(

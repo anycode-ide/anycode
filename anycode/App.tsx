@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AnycodeEditorReact, AnycodeEditor, Edit, Operation } from 'anycode-react';
-import type { Change } from '../anycode-base/src/code';
+import type { Change, Position } from '../anycode-base/src/code';
+import { type Cursor, type CursorHistory} from './types';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
 import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } from './components';
@@ -25,6 +26,7 @@ const App: React.FC = () => {
     const editorRefs = useRef<Map<string, AnycodeEditor>>(new Map());
     const diagnosticsRef = useRef<Map<string, Diagnostic[]>>(new Map());
     const pendingPositions = useRef<Map<string, { line: number; column: number }>>(new Map());
+    const cursorHistory = useRef<CursorHistory>({ undoStack: [], redoStack: [] });
     const activeFile = files.find(f => f.id === activeFileId);
     const lengthSpanRef = useRef<HTMLSpanElement>(null);
     
@@ -82,6 +84,7 @@ const App: React.FC = () => {
         const editor = new AnycodeEditor(content, filename, language, options);
         await editor.init();
         editor.setOnChange((change: Change) => handleChange(filename, change));
+        editor.setOnCursorChange((newState: any, oldState: any) => handleCursorChange(filename, newState, oldState));
         editor.setCompletionProvider(handleCompletion);
         editor.setGoToDefinitionProvider(handleGoToDefinition);
         editor.setErrors(errors || []);
@@ -136,6 +139,14 @@ const App: React.FC = () => {
             }
             if (e.ctrlKey && e.key === "1") setLeftPanelVisible(prev => !prev)
             if (e.ctrlKey && e.key === "2") setTerminalVisible(prev => !prev)
+            
+            if (e.ctrlKey && e.key === "-") {
+                e.preventDefault();
+                undoCursor();
+            } else if (e.ctrlKey && e.key === "_") {
+                e.preventDefault();
+                redoCursor();
+            }
         };
 
         document.addEventListener('keydown', handleKeyDown);
@@ -220,6 +231,19 @@ const App: React.FC = () => {
             requestAnimationFrame(() => {
                 lengthSpanRef.current!.textContent = newContent.length.toString();
             });
+        }
+    };
+
+    const handleCursorChange = (filename: string, newCursor: Position, oldCursor: Position) => {
+        console.log('handleCursorChange:', {filename, newCursor, oldCursor});
+
+        if (newCursor.line === oldCursor.line && newCursor.column === oldCursor.column) {
+            console.log('handleCursorChange - not changed:', {filename, newCursor, oldCursor});
+        } else {
+            const cursorPos = { file: activeFileId || '', cursor: oldCursor };
+            console.log('handleCursorChange - saving position:', cursorPos);
+            cursorHistory.current.undoStack.push(cursorPos);
+            cursorHistory.current.redoStack = [];
         }
     };
 
@@ -517,6 +541,17 @@ const App: React.FC = () => {
         }
     };
 
+    const openTreeFile = (file: string) => {
+        console.log('Opening file from tree:', file);
+        
+        // const cursorPos = { file, cursor: { line: 0, column: 0 } };
+        // console.log('Saving position (0,0) for tree file:', cursorPos);
+        // cursorHistory.current.undoStack.push(cursorPos);
+        // cursorHistory.current.redoStack = [];
+        
+        openFile(file);
+    };
+
     const handleOpenFileResponse = (path: string, content: string) => {
         const fileName = path.split('/').pop() || 'untitled';
         const language = getLanguageFromFileName(fileName);
@@ -637,6 +672,15 @@ const App: React.FC = () => {
         return new Promise((resolve, reject) => {
             console.log('handleGoToDefinition', definitionRequest);
             
+            if (activeFileId) {
+                const editor = editorRefs.current.get(activeFileId);
+                if (editor) {
+                    const cursorPos = { file: activeFileId, cursor: editor.getCursor() };
+                    cursorHistory.current.undoStack.push(cursorPos);
+                    cursorHistory.current.redoStack = [];
+                }
+            }
+            
             if (!wsRef.current) {
                 console.error('WebSocket not connected');
                 reject(new Error('WebSocket not connected'));
@@ -683,6 +727,95 @@ const App: React.FC = () => {
         });
     };
 
+    const undoCursor = () => {
+        console.log("undoCursor");
+        console.log('History before undo:', cursorHistory.current);
+
+        if (cursorHistory.current.undoStack.length === 0) {
+            console.log('No positions to undo');
+            return;
+        }
+        
+        if (activeFileId) {
+            const editor = editorRefs.current.get(activeFileId);
+            if (editor) {
+                const cursorPos = { file: activeFileId, cursor: editor.getCursor() };
+                cursorHistory.current.redoStack.push(cursorPos);
+            }
+        }
+
+        var prevPosition = cursorHistory.current.undoStack.pop();
+        console.log("undoCursor ", prevPosition);
+        // if cursor the same, pop one more 
+        // if (prevPosition && prevPosition.file === activeFileId) {
+        //     const editor = editorRefs.current.get(activeFileId);
+        //     if (editor) {
+        //         const cursor = editor.getCursor();
+        //         if (cursor.line === prevPosition.cursor.line && 
+        //             cursor.column === prevPosition.cursor.column)
+        //             prevPosition = cursorHistory.current.undoStack.pop();  
+        //     }
+        // }   
+        
+        if (prevPosition && prevPosition.file) {
+            const filePath = prevPosition.file;
+            const fileName = filePath.split('/').pop() || '';
+            const { line, column } = prevPosition.cursor;
+
+
+            pendingPositions.current.set(filePath, { line, column });
+
+            const existingFile = filesRef.current.find(f => f.id === filePath || f.name === fileName);
+            if (existingFile) {
+                setActiveFileId(existingFile.id);
+                const editor = editorRefs.current.get(existingFile.id);
+                if (editor) {
+                    editor.requestFocus(line, column, true);
+                }
+            } else {
+                openFile(filePath);
+            }
+        }
+    };
+
+    const redoCursor = () => {
+        console.log("redoCursor");
+        console.log('History before redo:', cursorHistory.current);
+
+        if (cursorHistory.current.redoStack.length === 0) {
+            console.log('No positions to redo');
+            return;
+        }
+
+        if (activeFileId) {
+            const editor = editorRefs.current.get(activeFileId);
+            if (editor) {
+                const cursorPos = { file: activeFileId, cursor: editor.getCursor() };
+                cursorHistory.current.undoStack.push(cursorPos);
+            }
+        }
+
+        const nextPosition = cursorHistory.current.redoStack.pop();        
+        if (nextPosition && nextPosition.file) {
+            const filePath = nextPosition.file;
+            const fileName = filePath.split('/').pop() || '';
+            const { line, column } = nextPosition.cursor;
+
+            pendingPositions.current.set(filePath, { line, column });
+
+            const existingFile = filesRef.current.find(f => f.id === filePath || f.name === fileName);
+            if (existingFile) {
+                setActiveFileId(existingFile.id);
+                const editor = editorRefs.current.get(existingFile.id);
+                if (editor) {
+                    editor.requestFocus(line, column, true);
+                }
+            } else {
+                openFile(filePath);
+            }
+        }
+    };
+
     useEffect(() => {
         const file = files.find(f => f.id === activeFileId);
         if (file) {
@@ -705,6 +838,8 @@ const App: React.FC = () => {
         if (files.length === 0) {
             setFiles([DEFAULT_FILE]);
             setActiveFileId(DEFAULT_FILE.id);
+            const currentPos = { file: DEFAULT_FILE.id, cursor: { line: 0, column: 0 } };
+            cursorHistory.current.undoStack.push(currentPos);
         }
         
         return () => {
@@ -748,7 +883,7 @@ const App: React.FC = () => {
                                                         node={node} 
                                                         onToggle={toggleNode}
                                                         onSelect={selectNode}
-                                                        onOpenFile={openFile}
+                                                        onOpenFile={openTreeFile}
                                                         onLoadFolder={openFolder}
                                                     />
                                                 ))}

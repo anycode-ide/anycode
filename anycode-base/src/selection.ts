@@ -37,6 +37,10 @@ export class Selection {
             : [this.cursor!, this.anchor!];
     }
 
+    public isBackward(): boolean {
+        return this.cursor! < this.anchor!;
+    }
+
     public get start(): number {
         return Math.min(this.anchor!, this.cursor!);
     }
@@ -131,8 +135,16 @@ interface DOMPosition {
 }
 
 function resolveDOMPosition(
-    offset: number, lines: AnycodeLine[], code: Code
+    offset: number, lines: AnycodeLine[], code: Code,
 ): DOMPosition | null {
+
+    const pos = code.getPosition(offset);
+    const lineLength = code.line(pos.line).length;
+    
+    if (pos.column === 0 && lineLength === 0 && offset > 0) {
+        offset = offset - 1;
+    }
+    
     for (const line of lines) {
         const lineOffset = code.getOffset(line.lineNumber, 0);
         const lineLength = Array.from(line.childNodes)
@@ -142,14 +154,29 @@ function resolveDOMPosition(
         if (offset >= lineOffset && offset <= lineOffset + lineLength) {
             let remaining = offset - lineOffset;
 
+            if (lineLength === 0 && remaining === 0) {
+                const firstSpan = line.firstChild;
+                if (firstSpan) {
+                    const textNode = firstSpan.firstChild || firstSpan;
+                    return { node: textNode, offset: 0 };
+                }
+            }
+
             for (const span of line.childNodes) {
                 const len = span.textContent?.length ?? 0;
+                
                 if (remaining <= len) {
-                    const textNode = span.firstChild;
-                    if (!textNode) return null;
+                    const textNode = span.firstChild || span;
                     return { node: textNode, offset: remaining };
                 }
                 remaining -= len;
+            }
+
+            const lastSpan = line.lastChild;
+            if (lastSpan) {
+                const lastLen = lastSpan.textContent?.length ?? 0;
+                const textNode = lastSpan.firstChild || lastSpan;
+                return { node: textNode, offset: lastLen };
             }
         }
     }
@@ -220,6 +247,7 @@ export function setSelectionFromOffsets(
 
     const startPos = resolveDOMPosition(clamped.start, lines, code);
     const endPos = resolveDOMPosition(clamped.end, lines, code);
+
     if (!startPos || !endPos) return;
 
     // Ensure we're working with the correct document context
