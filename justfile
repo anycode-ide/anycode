@@ -8,8 +8,8 @@ run-frontend:
 build-frontend:
     cd anycode && pnpm run build
 
-run-backend: build-frontend
-    cd anycode-backend-rust && cargo run --release
+run-backend:
+    cd anycode-backend && cargo run --release
 
-run-backend-rust:
-    cd anycode-backend-rust && cargo run --release
+build-backend: build-frontend
+    cd anycode-backend && cargo build --release

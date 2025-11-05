@@ -37,14 +37,14 @@ WORKDIR /app/backend
 
 # Stage 2b: Planning (dependency calculation)
 FROM chef AS planner
-COPY anycode-backend-rust ./
+COPY anycode-backend ./
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Stage 2c: Building backend using dependency caching
 FROM chef AS anycode-backend-builder
 COPY --from=planner /app/backend/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
-COPY anycode-backend-rust ./
+COPY anycode-backend ./
 COPY --from=anycode-frontend-builder /app/anycode/dist ./dist
 RUN cargo build --release
 

@@ -3,7 +3,8 @@
   height: 100%;
   overflow: auto;
   font-family: monospace;
-  background: #242424;
+  /* background: #242424; */
+  background: rgba(22, 22, 23, .8);
   color: #fff;
   white-space: pre;
   outline: none;
@@ -80,7 +81,8 @@
   -webkit-backdrop-filter: blur(3px);
   border-radius: 12px;
   cursor: pointer;
-  background-color: #2424247a;
+  /* background-color: #2424247a; */
+  background-color: rgba(22, 22, 23, .8);
   padding: 2px 8px;
 }
 

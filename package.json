@@ -13,6 +13,7 @@
   "devDependencies": {
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "electron": "37.6.0",
     "typescript": "^5.8.3"
   }
 }
