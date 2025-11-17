@@ -109,7 +109,117 @@
   border-radius: 10px;
 }
 
-/* .completion-item:hover {
-  background-color: rgba(130, 130, 130, 0.151);
-  border-radius: 10px;
-} */
+
+.search {
+  position: absolute;
+  padding: 0.7rem;
+  top: 0;
+  right: 0; 
+  margin-right: 1.3rem;
+  margin-top: 0.7rem;
+  min-width: 300px;
+  max-width: 80vw;
+  z-index: 10000;
+  overflow: visible;
+  transition: top 0.01s ease-out, left 0.1s ease-out; 
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid #555;
+  background-color: #2424247a;
+  /* background-color: rgba(22, 22, 23, .8); */
+  display: flex;
+  flex-direction: column;
+}
+
+.search input,
+.search textarea {
+  border: none;
+  /* padding: 0; */
+  /* border-top: 1px solid gray; */
+  outline: none;
+  background-color: transparent;
+  font-family: monospace;
+  font-size: 16px;
+  width: 100%;
+  box-sizing: border-box;
+  /* margin-left: 10px; */
+  color: white;
+  line-height: 1.4;
+  padding: 2px 0;
+}
+
+.search textarea {
+  resize: vertical;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 4px;
+}
+
+.search search-label {
+  cursor: pointer;
+  user-select: none; /* Prevent text selection */
+  pointer-events: none; /* Disable mouse events */
+  padding: 0.5rem;
+}
+
+.search-close-button {
+  cursor: pointer;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  transition: background-color 0.2s ease;
+}
+
+.search-close-button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.search-close-button:active {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.search .search-button {
+  cursor: pointer;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background-color: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  transition: background-color 0.2s ease;
+}
+
+.search .search-button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.search .search-button:active {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.highlight {
+  background: rgba(179, 179, 179, 0.406);
+  /* border-radius: 3px; */
+}
+
+.highlight.selected {
+  background: rgba(210, 210, 210, 0.9);
+}

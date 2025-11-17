@@ -186,7 +186,7 @@ function resolveDOMPosition(
 export function setSelectionFromOffsets(
     selection: Selection, lines: AnycodeLine[], code: Code
 ) {    
-    // console.log("setSelectionFromOffsets ", selection);
+    console.log("setSelectionFromOffsets ", selection);
 
     if (lines.length === 0) return;
 
@@ -207,7 +207,6 @@ export function setSelectionFromOffsets(
 
     // Check if the same selection is already active
     const currentSelection = getSelection();
-    // console.log('currentSelection', currentSelection);
     if (currentSelection) {
         const currentStartOffset = code.getOffset(currentSelection.start.row, currentSelection.start.col);
         const currentEndOffset = code.getOffset(currentSelection.end.row, currentSelection.end.col);
@@ -218,7 +217,6 @@ export function setSelectionFromOffsets(
             return;
         }
     }
-
     
     // Ensure all lines are connected to the DOM before proceeding
     for (const line of lines) {
@@ -263,7 +261,7 @@ export function setSelectionFromOffsets(
     try {
         sel.removeAllRanges();
         sel.addRange(range);
-        // console.log("addRange", range);
+        console.log("addRange", range);
     } catch (error) {
         console.warn('Failed to add range to selection:', error);
     }

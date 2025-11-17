@@ -55,6 +55,19 @@ export function moveCursor(
     range.setStart(ch, chunkCharacter);
     range.collapse(true);
     
+    // Check if the range is already the same as the current selection
+    // Do this early to avoid unnecessary scrolling and DOM operations
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+        const currentRange = sel.getRangeAt(0);
+        if (currentRange.startContainer === range.startContainer &&
+            currentRange.startOffset === range.startOffset &&
+            currentRange.collapsed === range.collapsed) {
+            // console.log('moveCursor: range already the same, skipping update');
+            return;
+        }
+    }
+    
     if (focus) {
         const scrollable = lineDiv?.parentElement?.parentElement;
         scrollCursorIntoViewVertically(scrollable!, lineDiv);
@@ -79,7 +92,6 @@ export function moveCursor(
         );
     }
 
-    const sel = window.getSelection();
     if (sel) {
         // Ensure the range is valid and in the same document as the selection
         try {

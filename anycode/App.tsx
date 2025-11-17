@@ -130,6 +130,10 @@ const App: React.FC = () => {
     // hotkey handler
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.metaKey && e.key === "f") {
+                e.preventDefault();
+            }
+
             // Ctrl+S to save active file
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();

@@ -802,20 +802,85 @@ export class Code {
         if (pattern === "") return [];
         const matches: { line: number; column: number }[] = [];
 
-        // Iterate over each line of the text buffer
-        for (let lineIndex = 0; lineIndex < this.linesLength(); lineIndex++) {
-            const lineText = this.line(lineIndex);
-            let startIndex = 0;
+        // Split pattern into lines for multiline search
+        const patternLines = pattern.split(/\r?\n/);
+        const isMultiline = patternLines.length > 1;
 
-            // Find all occurrences of the pattern in the line
-            while ((startIndex = lineText.indexOf(pattern, startIndex)) !== -1) {
-                matches.push({
-                    line: lineIndex,
-                    column: startIndex,
-                });
+        if (!isMultiline) {
+            // Single-line search: optimized path for backward compatibility
+            for (let lineIndex = 0; lineIndex < this.linesLength(); lineIndex++) {
+                const lineText = this.line(lineIndex);
+                let startIndex = 0;
 
-                // Move to the next character to find subsequent matches
-                startIndex += pattern.length;
+                while ((startIndex = lineText.indexOf(pattern, startIndex)) !== -1) {
+                    matches.push({
+                        line: lineIndex,
+                        column: startIndex,
+                    });
+                    startIndex += pattern.length;
+                }
+            }
+            return matches;
+        }
+
+        // Multiline search: find matches line by line
+        // Strategy: 
+        // 1. Find first line pattern anywhere in document lines
+        // 2. Verify subsequent lines match exactly (for intermediate lines)
+        // 3. Last line must start with pattern or match exactly
+        const firstLinePattern = patternLines[0];
+        const remainingLines = patternLines.slice(1);
+
+        // Iterate through all possible starting lines
+        for (let startLineIndex = 0; startLineIndex < this.linesLength(); startLineIndex++) {
+            const firstLineText = this.line(startLineIndex);
+            let columnIndex = 0;
+
+            // Find all occurrences of the first line pattern in current line
+            while ((columnIndex = firstLineText.indexOf(firstLinePattern, columnIndex)) !== -1) {
+                // Verify that all remaining pattern lines match sequentially
+                let allLinesMatch = true;
+                
+                for (let i = 0; i < remainingLines.length; i++) {
+                    const checkLineIndex = startLineIndex + i + 1;
+                    
+                    // Ensure we have enough lines remaining in document
+                    if (checkLineIndex >= this.linesLength()) {
+                        allLinesMatch = false;
+                        break;
+                    }
+
+                    const checkLineText = this.line(checkLineIndex);
+                    const patternLine = remainingLines[i];
+                    
+                    // Matching rules:
+                    // - Intermediate lines: must match exactly
+                    // - Last line: must start with pattern or match exactly
+                    if (i === remainingLines.length - 1) {
+                        // Last line: flexible matching (starts with or exact match)
+                        if (!checkLineText.startsWith(patternLine) && 
+                            checkLineText !== patternLine) {
+                            allLinesMatch = false;
+                            break;
+                        }
+                    } else {
+                        // Intermediate lines: strict exact match required
+                        if (checkLineText !== patternLine) {
+                            allLinesMatch = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allLinesMatch) {
+                    matches.push({
+                        line: startLineIndex,
+                        column: columnIndex,
+                    });
+                }
+
+                // Advance to next potential match position
+                columnIndex += firstLinePattern.length;
             }
         }
 

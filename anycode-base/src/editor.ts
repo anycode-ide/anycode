@@ -1,3 +1,5 @@
+
+
 import { Code, Edit, Change, Position } from "./code";
 import { vesper } from './theme';
 import { Renderer } from './renderer';
@@ -15,6 +17,7 @@ import {
 } from './utils';
 
 import './styles.css';
+import { Search } from "./search";
 
 export interface EditorSettings {
     lineHeight: number;
@@ -39,6 +42,7 @@ export class AnycodeEditor {
     private buttonsColumn!: HTMLDivElement;
     private gutter!: HTMLDivElement;
     private codeContent!: HTMLDivElement;
+    private isFocused: boolean;
     private maxLineWidth = 0;
     
     private isMouseSelecting: boolean = false;
@@ -60,6 +64,8 @@ export class AnycodeEditor {
     private onCursorChangeCallback: ((newCursor: Position, oldCursor: Position) => void) | null = null;
 
     private needFocus = false;
+
+    private search: Search = new Search();
 
     constructor(
         initialText = '', 
@@ -86,6 +92,7 @@ export class AnycodeEditor {
         this.createDomElements();
         this.renderer = new Renderer(this.container, this.buttonsColumn, this.gutter, this.codeContent);
         console.log("code constructor, this.offset", this.offset);
+        this.isFocused = true;
     }
     
     private createDomElements() {
@@ -227,6 +234,9 @@ export class AnycodeEditor {
 
         this.handleBlur = this.handleBlur.bind(this);
         this.codeContent.addEventListener('blur', this.handleBlur);
+
+        this.handleFocus = this.handleFocus.bind(this);
+        this.codeContent.addEventListener('focus', this.handleFocus);
     }
     
     private removeEventListeners() {
@@ -246,7 +256,7 @@ export class AnycodeEditor {
         requestAnimationFrame(() => {
             if (scrollTop !== this.lastScrollTop) {
                 let state = this.getEditorState();
-                this.renderer.renderScroll(state);
+                this.renderer.renderScroll(state, this.search);
                 this.lastScrollTop = scrollTop;
             }
             this.needFocus = false
@@ -276,7 +286,7 @@ export class AnycodeEditor {
     }
 
     public render() {
-        this.renderer.render(this.getEditorState());
+        this.renderer.render(this.getEditorState(), this.search);
     }
 
     public renderCursorOrSelection() {
@@ -347,14 +357,21 @@ export class AnycodeEditor {
     }
 
     private handleBlur(e: FocusEvent) {
-        // console.log('Editor lost focus');
+        console.log('Editor lost focus');
         this.isMouseSelecting = false;
         this.isWordSelection = false;
+        this.isFocused = false;
         
         if (this.autoScrollTimer) {
             cancelAnimationFrame(this.autoScrollTimer);
             this.autoScrollTimer = null;
         }
+    }
+
+    private handleFocus(e: FocusEvent) {
+        console.log('Editor focus');
+        this.isFocused = true;
+        this.search.setNeedsFocus(false);
     }
     
     private handleMouseDown(e: MouseEvent) {
@@ -538,12 +555,19 @@ export class AnycodeEditor {
     
     private async handleKeydown(event: KeyboardEvent) {
         console.log('keydown', event);
+
         if (event.metaKey && event.key === " ") {
             event.preventDefault();
             this.toggleCompletion();
             return;
         }
     
+        if (event.metaKey && event.key === "f" || this.search.isFocused()) {
+            event.preventDefault();
+            this.handleSearchKey(event);
+            return;
+        }
+
         if (this.handleCompletionKey(event)) {
             event.preventDefault();
             return;
@@ -580,6 +604,12 @@ export class AnycodeEditor {
 
         if (this.isCompletionOpen){
             await this.showCompletion();
+        }
+        
+        if (this.search.isActive() && action === Action.ESC) {
+            this.renderer.removeAllHighlights(this.search);
+            this.renderer.removeSearch();
+            this.search.clear();
         }
     }
     
@@ -642,35 +672,26 @@ export class AnycodeEditor {
     }
     
     private applyEditResult(result: ActionResult) {
-        console.log("applyEditResult");
-
         const textChanged = result.changed;
         const offsetChanged = result.ctx.offset !== this.offset;
         const selectionChanged = this.selection !== result.ctx.selection;
         
-        // Update all state first
+        if (!textChanged && !offsetChanged && !selectionChanged) return;
+    
+        if (textChanged) this.code = result.ctx.code;
+        if (offsetChanged) this.offset = result.ctx.offset;
+        if (selectionChanged) this.selection = result.ctx.selection || null;
+    
+        const state = this.getEditorState();
+        const focused = this.renderer.focus(state);
+    
         if (textChanged) {
-            this.code = result.ctx.code;
+            let matches = this.code.search(this.search.getPattern());
+            this.search.setMatches(matches);
+            if (!focused) this.renderer.renderChanges(state, this.search);
+        } else if (offsetChanged || selectionChanged) {
+            if (!focused) this.renderer.renderCursorOrSelection(state);
         }
-        
-        if (offsetChanged) {
-            this.offset = result.ctx.offset;
-        }
-        
-        if (selectionChanged) {
-            this.selection = result.ctx.selection || null;
-        }
-        
-        // Then render based on what changed
-        if (textChanged) {
-            // Text changed - rerender changes
-            this.maxLineWidth = 0
-            let focused = this.renderer.focus(this.getEditorState());
-            if (!focused) this.renderer.renderChanges(this.getEditorState());
-        } else {
-            let focused = this.renderer.focus(this.getEditorState());
-            if (!focused) this.renderer.renderCursorOrSelection(this.getEditorState());           
-        } 
     }
     
     private async handleBeforeInput(e: InputEvent) {
@@ -802,7 +823,7 @@ export class AnycodeEditor {
 
         this.renderer.closeCompletion();
         this.isCompletionOpen = false;
-        this.renderer.renderChanges(this.getEditorState());
+        this.renderer.renderChanges(this.getEditorState(), this.search);
     }
 
     private handleCompletionKey(event: KeyboardEvent): boolean {
@@ -836,5 +857,161 @@ export class AnycodeEditor {
         }
 
         return false;
+    }
+
+    private handleSearchKey(event: KeyboardEvent): boolean {
+        const { key, altKey, ctrlKey, metaKey, shiftKey } = event;
+        let isSearch = false;
+
+        if (metaKey && key.toLowerCase() == 'f') {
+            this.renderer.removeAllHighlights(this.search);
+        
+            this.search.setActive(true);
+            this.search.setNeedsFocus(true);
+            let pattern = this.search.getPattern();
+
+            if (this.selection && !this.selection.isEmpty()) {
+                let [start, end] = this.selection!.sorted();
+                let content = this.code.getIntervalContent2(start, end);
+                pattern = content;
+            }
+            
+            let matches = this.code.search(pattern);
+            this.search.setPattern(pattern);
+            this.search.setMatches(matches);
+
+            // Find the first match
+            let { line, column } = this.code.getPosition(this.offset);
+            let foundIndex = matches.findIndex((match) => match.line > line || 
+                (match.line === line && match.column + pattern.length >= column)
+            );
+            if (foundIndex === -1 && matches.length > 0) { foundIndex = 0; }
+            this.search.setSelected(foundIndex);
+
+            this.renderer.renderSearch(this.search, this.getEditorState(), {
+                onKeyDown: this.onSearchKeyDown.bind(this),
+                onInputChange: this.onSearchInputChange.bind(this)
+            });
+            isSearch = true;
+        }
+        
+
+        if (event.key === "Escape" && this.search.isActive()) {    
+            this.renderer.removeAllHighlights(this.search);
+            this.renderer.removeSearch();
+            this.search.clear();
+            isSearch = false;
+        }
+
+        return isSearch;
+    }
+
+    private onSearchKeyDown(event: KeyboardEvent, input: HTMLTextAreaElement) {
+        console.log('[onSearchKeyDown]', {
+            key: event.key,
+            pattern: this.search.getPattern(),
+            matches: this.search.getMatches(),
+            selected: this.search.getSelected(),
+        });
+
+        const pattern = this.search.getPattern();
+        const patternLines = pattern.split(/\r?\n/);
+        const isMultiline = patternLines.length > 1;
+
+        if (event.metaKey && event.key === 'f') {
+            event.preventDefault();
+            event.stopPropagation();
+            // ignore search  
+            return
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            this.renderer.removeAllHighlights(this.search);
+            this.renderer.removeSearch();
+            this.search.clear();
+            this.renderer.renderCursorOrSelection(this.getEditorState());
+            return;
+        }
+
+        if ((event.altKey || !isMultiline) && event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            const currentMatches = this.search.getMatches();
+            if (currentMatches.length === 0) return;
+            this.renderer.removeSelectedHighlight(this.search);
+            this.search.selectPrev();
+            this.search.setNeedsFocus(true);
+            this.renderer.focus(this.getEditorState(), this.search.getSelectedMatch()?.line);
+            this.renderer.updateSearchHighlights(this.search);
+            return;
+        }
+
+        if ((event.altKey || !isMultiline) && event.key === 'ArrowDown') {
+            event.preventDefault();
+            event.stopPropagation();
+            const currentMatches = this.search.getMatches();
+            if (currentMatches.length === 0) return;
+            this.renderer.removeSelectedHighlight(this.search);
+            this.search.selectNext();
+            this.search.setNeedsFocus(true);
+            this.renderer.focus(this.getEditorState(), this.search.getSelectedMatch()?.line);
+            this.renderer.updateSearchHighlights(this.search);
+            return;
+        }
+
+        if (!event.shiftKey && event.key === 'Enter') {
+            event.preventDefault();
+            event.stopPropagation();
+            const selectedMatch = this.search.getSelectedMatch();
+            if (selectedMatch) {
+                this.renderer.removeAllHighlights(this.search);
+                this.renderer.removeSearch();
+                let start = this.code.getOffset(selectedMatch.line, selectedMatch.column);
+                let end = start + this.search.getPattern().length;
+                this.offset = end;
+                this.selection = new Selection(start, end);
+                this.search.clear();
+                this.container.focus();
+                let focused = this.renderer.focus(this.getEditorState(), selectedMatch.line);
+                if (!focused) this.renderer.renderCursorOrSelection(this.getEditorState());
+            }
+            return;
+        }
+    }
+
+    private onSearchInputChange(value: string) {
+        // Clear everything
+        this.renderer.removeAllHighlights(this.search);
+
+        const pattern = value.trim();
+        
+        if (!pattern) {
+            this.search.clear();
+            this.search.setActive(false);
+            this.search.setNeedsFocus(false);
+            return;
+        }
+    
+        // Perform search
+        const matches = this.getEditorState().code.search(pattern);
+        this.search.clear();
+        this.search.setActive(true);
+        this.search.setMatches(matches);
+        this.search.setPattern(pattern);    
+    
+        // Find first match after cursor
+        const { line, column } = this.code.getPosition(this.offset);
+        let foundIndex = matches.findIndex((match) =>
+            match.line > line ||
+            (match.line === line && match.column >= column)
+        );
+        if (foundIndex === -1 && matches.length > 0) {
+            foundIndex = 0;
+        }
+    
+        this.search.setSelected(foundIndex);
+        this.renderer.updateSearchHighlights(this.search);
+        this.search.setNeedsFocus(true);
     }
 }
