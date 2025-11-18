@@ -186,24 +186,9 @@ function resolveDOMPosition(
 export function setSelectionFromOffsets(
     selection: Selection, lines: AnycodeLine[], code: Code
 ) {    
-    console.log("setSelectionFromOffsets ", selection);
+    // console.log("setSelectionFromOffsets ", selection);
 
     if (lines.length === 0) return;
-
-    // temporary fix, remove invalid selection if it points to a div.code container
-    let currentWindowSelection = window.getSelection();
-    if (currentWindowSelection && currentWindowSelection.rangeCount > 0) {
-        let range = currentWindowSelection.getRangeAt(0);
-        if (range) {
-            let startContainer = range.startContainer;
-            let endContainer = range.endContainer;
-            if ((startContainer instanceof HTMLElement && startContainer.classList.contains('code')) ||
-                (endContainer instanceof HTMLElement && endContainer.classList.contains('code'))) {
-                currentWindowSelection.removeAllRanges();
-                // return;
-            }
-        }
-    }
 
     // Check if the same selection is already active
     const currentSelection = getSelection();
@@ -261,7 +246,7 @@ export function setSelectionFromOffsets(
     try {
         sel.removeAllRanges();
         sel.addRange(range);
-        console.log("addRange", range);
+        // console.log("addRange", range);
     } catch (error) {
         console.warn('Failed to add range to selection:', error);
     }
