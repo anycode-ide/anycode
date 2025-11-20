@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 use tokio::sync::Mutex;
 use crate::code::Code;
 use crate::config::Config;
@@ -30,6 +30,7 @@ pub struct SocketData {
 pub struct TerminalData {
     pub terminal: Arc<Terminal>,
     pub sockets: Arc<Mutex<Vec<SocketRef>>>,
+    pub buffer: Arc<Mutex<VecDeque<String>>>,
 }
 
 

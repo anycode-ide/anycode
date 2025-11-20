@@ -440,9 +440,18 @@
 .terminal-panel {
     height: 100%;
     overflow: hidden;
-    padding: 0.5rem 0.5rem;
     padding-bottom: calc(var(--toolbar-total-space));
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    padding: 0.5rem 0.5rem;
+    height: 100%;
 }
 
 .terminal-panel .terminal-container {

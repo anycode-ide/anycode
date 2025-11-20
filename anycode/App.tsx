@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { AnycodeEditorReact, AnycodeEditor, Edit, Operation } from 'anycode-react';
 import type { Change, Position } from '../anycode-base/src/code';
-import { type Cursor, type CursorHistory} from './types';
+import { type Cursor, type CursorHistory, type Terminal} from './types';
+import { loadTerminals, loadTerminalVisible, loadLeftPanelVisible } from './storage';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
-import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent } from './components';
+import { TreeNodeComponent, TreeNode, FileState, DebugInfo, TerminalComponent, TerminalTabs } from './components';
 import { DEFAULT_FILE, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
 import './App.css';
 import { 
@@ -35,16 +36,15 @@ const App: React.FC = () => {
     const [isConnected, setIsConnected] = useState<boolean>(true);
     const [connectionError, setConnectionError] = useState<string | null>(null);
 
-    const [leftPanelVisible, setLeftPanelVisible] = useState<boolean>(true);
+    const [leftPanelVisible, setLeftPanelVisible] = useState<boolean>(loadLeftPanelVisible());
     const [debugMode, setDebugMode] = useState<boolean>(false);
-    const [terminalVisible, setTerminalVisible] = useState<boolean>(false);
-    
-    const terminalNameRef = useRef<string>('terminal');
-    const terminalSessionRef = useRef<string>('anycode');
-    const terminalColsRef = useRef<number>(60);
-    const terminalRowsRef = useRef<number>(20);
-    const terminalMessageHandlerRef = useRef<((data: string) => void) | null>(null);
-    
+    const [terminalVisible, setTerminalVisible] = useState<boolean>(loadTerminalVisible());
+
+    const [terminals, setTerminals] = useState<Terminal[]>(loadTerminals);
+    const [terminalSelected, setTerminalSelected] = useState<number>(0);
+    const terminalCounterRef = useRef<number>(1);
+    const newTerminalsRef = useRef<Set<string>>(new Set());
+
     const wsRef = useRef<Socket | null>(null);
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttemptsRef = useRef<number>(0);
@@ -53,6 +53,10 @@ const App: React.FC = () => {
     useEffect(() => {
         filesRef.current = files;
     }, [files]);
+
+    useEffect(() => {
+        localStorage.setItem('terminals', JSON.stringify(terminals));
+    }, [terminals]);
 
     const handleLeftPanelVisibleChange = (index: number, visible: boolean) => {
         console.log('handleLeftPanelVisibleChange', index, visible);
@@ -169,32 +173,6 @@ const App: React.FC = () => {
         }
     }, [activeFileId]);
 
-    // Terminal visibility change handler
-    useEffect(() => {
-        console.log('App: Terminal visibility effect triggered:', { 
-            terminalVisible, 
-            isConnected, 
-            hasWebSocket: !!wsRef.current,
-            terminalCols: terminalColsRef.current,
-            terminalRows: terminalRowsRef.current
-        });
-        
-        if (terminalVisible && isConnected && wsRef.current) {
-            console.log('App: Initializing terminal on backend');
-            // Initialize terminal when it becomes visible using new protocol
-            wsRef.current.emit('terminal:start', { 
-                name: terminalNameRef.current, 
-                session: terminalSessionRef.current,
-                cols: terminalColsRef.current, rows: terminalRowsRef.current 
-            });
-        } else {
-            console.log('App: Cannot initialize terminal:', {
-                terminalVisible,
-                isConnected,
-                hasWebSocket: !!wsRef.current
-            });
-        }
-    }, [terminalVisible, isConnected]);
 
     const applyEdit = (content: string, edit: Edit): string => {
         const { operation, start, text } = edit;
@@ -356,14 +334,10 @@ const App: React.FC = () => {
                 reconnectAttemptsRef.current = 0;
                 openFolder('.');
 
-                if (terminalVisible) {
-                    console.log('App: Initializing terminal after WebSocket connection');
-                    ws.emit('terminal:start', { 
-                        name: terminalNameRef.current, session: terminalSessionRef.current 
-                    });
-                } else {
-                    console.log('App: Terminal not visible, skipping initialization');
-                }
+                terminals.forEach(term => {
+                    console.log('App: Initializing terminal:', term.name);
+                    initializeTerminal(term);
+                });
             });
             ws.on('disconnect', (reason) => {
                 console.log('Disconnected from backend', reason);
@@ -378,11 +352,6 @@ const App: React.FC = () => {
             ws.on('error', (data) => {
                 console.error('Backend error:', data);
                 setConnectionError(data.message);
-            });
-            ws.on('terminal:data:' + terminalNameRef.current, (data: string) => {
-                if (terminalMessageHandlerRef.current) {
-                    terminalMessageHandlerRef.current(data);
-                }
             });
             ws.on("lsp:diagnostics", handleDiagnostics);
         } catch (error) {
@@ -436,35 +405,104 @@ const App: React.FC = () => {
         setIsConnected(false);
     };
 
-    // Terminal callbacks
+    const initializeTerminal = (terminal: Terminal) => {
+        if (!wsRef.current) return;
+
+        const isNewTerminal = newTerminalsRef.current.has(terminal.id);
+        const event = isNewTerminal ? 'terminal:start' : 'terminal:reconnect';
+
+        console.log(`Initializing terminal ${terminal.name} with ${event}`);
+
+        wsRef.current.emit(event, {
+            name: terminal.name,
+            session: terminal.session,
+            cols: terminal.cols,
+            rows: terminal.rows
+        });
+    };
+
     const handleTerminalData = useCallback((name: string, data: string) => {
-        // console.log('App: Terminal data received:', data);
+        const terminal = terminals.find(t => t.name === name);
+        if (!terminal) return;
+
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('terminal:input', { 
-                name: terminalNameRef.current, 
-                session: terminalSessionRef.current,
-                input: data 
+            wsRef.current.emit('terminal:input', {
+                name: terminal.name,
+                session: terminal.session,
+                input: data
             });
         }
-    }, [isConnected]);
-
-    const handleTerminalMessage = useCallback((name: string, handler: (data: string) => void) => {
-        // console.log('App: Registering terminal message handler');
-        terminalMessageHandlerRef.current = handler;
-    }, []);
+    }, [isConnected, terminals]);
 
     const handleTerminalResize = useCallback((name: string, cols: number, rows: number) => {
-        console.log('App: Terminal resize:', { cols, rows });
-        terminalColsRef.current = cols;
-        terminalRowsRef.current = rows;
+        if (!terminalVisible) return;
+
+        const terminal = terminals.find(t => t.name === name);
+        if (!terminal) return;
+
         if (wsRef.current && isConnected) {
-            wsRef.current.emit('terminal:resize', { 
-                name: terminalNameRef.current, 
-                session: terminalSessionRef.current,
-                cols: cols, rows: rows 
+            wsRef.current.emit('terminal:resize', {
+                name: terminal.name,
+                session: terminal.session,
+                cols, rows
             });
         }
-    }, [isConnected]);
+    }, [isConnected, terminals]);
+
+    // Terminal data subscription handler
+    const handleTerminalDataCallback = (name: string, callback: (data: string) => void) => {
+        if (!wsRef.current) return () => {};
+
+        const channel = `terminal:data:${name}`;
+        const handler = (data: string) => { callback(data); };
+
+        wsRef.current.on(channel, handler);
+
+        return () => {
+            // console.log('handleTerminalDataCallback - removing handler:', channel);
+            // wsRef.current?.off(channel, handler);
+        };
+    }
+
+    const addTerminal = useCallback(() => {
+        // Find unique ID first
+        let nextid = terminalCounterRef.current + 1;
+        while (terminals.find(t => t.id === String(nextid))) {
+          nextid += 1;
+        }
+        terminalCounterRef.current = nextid;
+    
+        const id = String(nextid);
+        const name = String(nextid);
+        const session = 'anycode';
+        const cols = 60, rows = 20;
+        const newTerminal: Terminal = { id, name, session, cols, rows };
+        newTerminalsRef.current.add(id);
+        setTerminals(prev => [...prev, newTerminal]);
+        setTerminalSelected(terminals.length);
+
+        if (terminalVisible && wsRef.current && isConnected) 
+            initializeTerminal(newTerminal);
+    }, [terminals, terminalVisible, isConnected]);
+
+    const closeTerminal = useCallback((index: number) => {
+        const terminalToRemove = terminals[index];
+        newTerminalsRef.current.delete(terminalToRemove.id);
+        setTerminals(prev => prev.filter((_, i) => i !== index));
+
+        // Adjust selected terminal index
+        if (terminalSelected >= terminals.length - 1) {
+            setTerminalSelected(Math.max(0, terminals.length - 2));
+        }
+
+        // Clean up terminal on backend
+        if (wsRef.current && isConnected) {
+            wsRef.current.emit('terminal:close', {
+                name: terminalToRemove.name, 
+                session: terminalToRemove.session
+            });
+        }
+    }, [terminals, terminalSelected, isConnected]);
 
     const openFolder = (path: string) => {
         if (wsRef.current && isConnected) {
@@ -478,7 +516,7 @@ const App: React.FC = () => {
             return;
         }
         
-        console.log('Received directory via ack:', response);
+        // console.log('Received directory via ack:', response);
         
         if (response.relative_path === '.') {
             let children = convertToTree(response.files, response.dirs, '.');
@@ -523,13 +561,13 @@ const App: React.FC = () => {
     };
 
     const openFile = (path: string) => {
-        console.log('Opening file:', path);
-        console.log('Current files:', files.map(f => ({ id: f.id, name: f.name })));
+        // console.log('Opening file:', path);
+        // console.log('Current files:', files.map(f => ({ id: f.id, name: f.name })));
         
         const existingFile = files.find(file => file.id === path);
         
         if (existingFile) {
-            console.log('File already open, switching to:', existingFile.name);
+            // console.log('File already open, switching to:', existingFile.name);
             setActiveFileId(existingFile.id);
             return;
         }
@@ -834,6 +872,14 @@ const App: React.FC = () => {
         if (isConnected && wsRef.current) openFolder('.');
       }, [isConnected]);
 
+    useEffect(() => {
+        localStorage.setItem('terminalVisible', JSON.stringify(terminalVisible));
+    }, [terminalVisible]);
+
+    useEffect(() => {
+        localStorage.setItem('leftPanelVisible', JSON.stringify(leftPanelVisible));
+    }, [leftPanelVisible]);
+
     // Connect to backend on component mount
     useEffect(() => {
         connectToBackend();
@@ -903,14 +949,9 @@ const App: React.FC = () => {
                                             key={activeFile.id}
                                             id={activeFile.id}
                                             editorState={editorStates.get(activeFile.id)!}
-                                            // focus={pendingPositions.current.has(activeFile.id)}
                                         />
                                     ) : (
                                         <div className="no-editor">
-                                            <div>
-                                                {/* <h3>No file selected</h3> */}
-                                                {/* <p>Select a file from the file tree to start editing</p> */}
-                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -919,16 +960,48 @@ const App: React.FC = () => {
                     </Allotment.Pane>
                     <Allotment.Pane snap visible={terminalVisible}>
                         <div className="terminal-panel">
-                            <TerminalComponent 
-                                name="terminal"
-                                onData={handleTerminalData}
-                                onMessage={handleTerminalMessage}
-                                onResize={handleTerminalResize}
-                                rows={terminalRowsRef.current}
-                                cols={terminalColsRef.current}
-                                isConnected={isConnected}
-                            />
-                            <div className="terminal-spacer"></div>
+                            <Allotment vertical={false} separator={false} defaultSizes={[15, 85]}>
+                                <Allotment.Pane snap minSize={100}>
+                                    <TerminalTabs
+                                        terminals={terminals}
+                                        terminalSelected={terminalSelected}
+                                        onSelectTerminal={setTerminalSelected}
+                                        onCloseTerminal={closeTerminal}
+                                        onAddTerminal={addTerminal}
+                                    />
+                                </Allotment.Pane>
+                                <Allotment.Pane>
+                                    <div className="terminal-content">
+                                        {terminals.map((term, index) => (
+                                            <div
+                                                key={term.id}
+                                                className="terminal-container"
+                                                style={{
+                                                    visibility: index === terminalSelected ? "visible" : "hidden",
+                                                    opacity: index === terminalSelected ? 1 : 0,
+                                                    pointerEvents: index === terminalSelected ? "auto" : "none",
+                                                    height: '100%',
+                                                    position: index === terminalSelected ? 'relative' : 'absolute',
+                                                    width: '100%',
+                                                    top: 0,
+                                                    left: 0
+                                                }}
+                                            >
+                                                <TerminalComponent
+                                                    name={term.name}
+                                                    onData={handleTerminalData}
+                                                    onMessage={handleTerminalDataCallback}
+                                                    onResize={handleTerminalResize}
+                                                    rows={term.rows}
+                                                    cols={term.cols}
+                                                    isConnected={isConnected}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </Allotment.Pane>
+                            </Allotment>
+                            {/* <div className="terminal-spacer"></div> */}
                         </div>
                     </Allotment.Pane>
                 </Allotment>
@@ -960,7 +1033,7 @@ const App: React.FC = () => {
                     className={`terminal-toggle-btn ${terminalVisible ? 'active' : ''}`}
                     title={terminalVisible ? 'Hide Terminal' : 'Show Terminal'}
                 >
-                   Terminal
+                   Terminals
                 </button>
 
                 <div className="tab-bar" style={{ flex: 1 }}>

@@ -21,7 +21,7 @@ function debounce<T extends (...args: any[]) => any>(
 interface XTerminalProps {
     name: string;
     onData: (name: string, data: string) => void;
-    onMessage: (name: string, handler: (data: string) => void) => void;
+    onMessage: (name: string, callback: (data: string) => void) => (() => void);
     onResize: (name: string, cols: number, rows: number) => void;
     rows: number;
     cols: number;
@@ -53,7 +53,7 @@ interface XTerminalProps {
         localStorage.setItem('terminal:data:' + name, snapshot);
         localStorage.setItem('terminal:mouseMode:' + name, mouseModeRef.current.toString());
       }
-    }, 1000);
+    }, 200);
   
     const restoreTerminalState = (terminal: Terminal) => {
       const snapshot = savedSnapshotRef.current || 
@@ -97,6 +97,8 @@ interface XTerminalProps {
     const prevColsRef = useRef<number>(cols);
 
     useEffect(() => {
+      let cleanup: (() => void) | undefined;
+
       if (!isConnected) {
         if (xtermRef.current) {
           xtermRef.current.dispose();
@@ -110,8 +112,8 @@ interface XTerminalProps {
       }
 
       // Only recreate terminal if rows/cols actually changed significantly
-      const shouldRecreateTerminal = !xtermRef.current || 
-        Math.abs(rows - prevRowsRef.current) > 1 || 
+      const shouldRecreateTerminal = !xtermRef.current ||
+        Math.abs(rows - prevRowsRef.current) > 1 ||
         Math.abs(cols - prevColsRef.current) > 1;
 
       if (shouldRecreateTerminal) {
@@ -165,7 +167,7 @@ interface XTerminalProps {
         const handler = (data: string) => {
           terminal.write(data);
           saveTerminalState();
-          
+
           // Check if mouse mode is being enabled/disabled by programs
           // These escape sequences are sent by programs like vim, nano, htop to enable mouse mode
           if (data.includes('\x1b[?1000h') || data.includes('\x1b[?1002h') || data.includes('\x1b[?1003h') || data.includes('\x1b[?1006h')) {
@@ -179,7 +181,7 @@ interface XTerminalProps {
           }
         };
         messageHandlerRef.current = handler;
-        onMessage(name, handler);
+        cleanup = onMessage(name, handler);
 
         terminal.onData((data) => {
           onData(name, data);
@@ -204,6 +206,9 @@ interface XTerminalProps {
       }
 
       return () => {
+        if (cleanup) {
+          cleanup();
+        }
         if (xtermRef.current) {
           xtermRef.current.dispose();
           xtermRef.current = null;

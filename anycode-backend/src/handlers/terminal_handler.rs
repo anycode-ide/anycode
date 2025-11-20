@@ -3,8 +3,10 @@ use socketioxide::{extract::{AckSender, Data, SocketRef, State}};
 use tracing::info;
 use crate::{app_state::{AppState,TerminalData}, terminal::Terminal};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 use tokio::sync::{Mutex, mpsc};
+
+const MAX_TERMINAL_BUFFER: usize = 500;
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -76,21 +78,48 @@ pub async fn handle_terminal_start(
     // Store sockets for this terminal
     let sockets = Arc::new(Mutex::new(vec![socket.clone()]));
 
+    let buffer = Arc::new(Mutex::new(VecDeque::with_capacity(MAX_TERMINAL_BUFFER)));
+
     // Create terminal data for app state
     let terminal_data = TerminalData {
         terminal: Arc::new(terminal),
         sockets: sockets.clone(),
+        buffer: buffer.clone(),
     };
 
     // Spawn task to handle terminal output
     let tname = terminal_name.clone();
     let sockets_clone = sockets.clone();
+    let buffer_clone = buffer.clone();
     tokio::spawn(async move {
         while let Some(output) = output_rx.recv().await {
-            let sockets_guard = sockets_clone.lock().await;
-            for socket in sockets_guard.iter() {
-                let channel = format!("terminal:data:{}", tname);
-                let _ = socket.emit(channel, &output);
+            let channel = format!("terminal:data:{}", tname);
+            let mut needs_buffer = false;
+
+            {
+                let sockets_guard = sockets_clone.lock().await;
+                if sockets_guard.is_empty() {
+                    needs_buffer = true;
+                } else {
+                    for socket in sockets_guard.iter() {
+                        if !socket.connected() {
+                            needs_buffer = true;
+                            continue;
+                        }
+
+                        if socket.emit(&channel, &output).is_err() {
+                            needs_buffer = true;
+                        }
+                    }
+                }
+            }
+
+            if needs_buffer {
+                let mut buffer_guard = buffer_clone.lock().await;
+                buffer_guard.push_back(output.clone());
+                while buffer_guard.len() > MAX_TERMINAL_BUFFER {
+                    buffer_guard.pop_front();
+                }
             }
         }
         info!("Terminal output handler finished for {}", tname);
@@ -237,10 +266,27 @@ pub async fn handle_terminal_reconnect(
         // Clear existing sockets and add the new one
         let mut sockets = terminal_data.sockets.lock().await;
         sockets.clear();
-        sockets.push(socket);
+        sockets.push(socket.clone());
 
         let _ = ack.send(&json!({ "success": true }));
         info!("Terminal {} reconnected successfully", name);
+
+        let buffered_output: Vec<String> = {
+            let mut buffer_guard = terminal_data.buffer.lock().await;
+            buffer_guard.drain(..).collect()
+        };
+        let buffered_output_len = buffered_output.len();
+                
+        // time sleep 100 milliseconds. TODO FIX THIS 
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        for chunk in buffered_output {
+            let channel = format!("terminal:data:{}", name);
+            let _ = socket.emit(channel, &chunk);
+        }
+        info!("Terminal {} reconnected with {} chunks of buffer successfully", 
+            name, buffered_output_len);
+
     } else {
         let _ = ack.send(&json!({ "success": false, "error": "Terminal not found" }));
         info!("Terminal {} not found for reconnection", name);

@@ -64,3 +64,11 @@ export interface CursorHistory {
     undoStack: Array<{ file: string; cursor: Cursor }>;
     redoStack: Array<{ file: string; cursor: Cursor }>;
 }
+
+export interface Terminal {
+    id: string;
+    name: string;
+    session: string;
+    cols: number;
+    rows: number;
+}
