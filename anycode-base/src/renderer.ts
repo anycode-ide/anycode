@@ -87,7 +87,7 @@ export class Renderer {
 
         // render search highlights
         if (search && search.isActive()) {
-            this.renderSearchHighlights(search);
+            this.updateSearchHighlights(search);
         }
     }
 
@@ -199,7 +199,7 @@ export class Renderer {
 
         // render search highlights
         if (search && search.isActive()) {
-            this.renderSearchHighlights(search);
+            this.updateSearchHighlights(search);
         }
         
         if (!changed) return;
@@ -267,7 +267,7 @@ export class Renderer {
 
         // render search highlights
         if (search && search.isActive()) {
-            this.renderSearchHighlights(search);
+            this.updateSearchHighlights(search);
         }
 
         // render cursor or selection
@@ -842,6 +842,14 @@ export class Renderer {
         const patternLines = pattern.split(/\r?\n/);
         const isMultiline = patternLines.length > 1;
 
+        if (!pattern) {
+            this.updateSearchLabel('');
+        } else if (matches.length === 0) {
+            this.updateSearchLabel('No matches');
+        } else {
+            this.updateSearchLabel(`Match ${selected + 1} of ${matches.length}`);
+        }
+
         for (let i = 0; i < matches.length; i++) {
             const match = matches[i];
             const isSelected = i === selected;
@@ -887,12 +895,6 @@ export class Renderer {
                 }
             }
         }
-
-        if (matches.length === 0) {
-            this.updateSearchLabel('No matches');
-        } else {
-            this.updateSearchLabel(`Match ${selected + 1} of ${matches.length}`);
-        }
     }
 
     public renderSearch(
@@ -922,11 +924,6 @@ export class Renderer {
         inputField.className = 'search-input';
         inputField.placeholder = 'Search';
         inputField.value = search.getPattern();
-        inputField.style.width = '100%';
-        inputField.style.resize = 'vertical';
-        inputField.style.minHeight = '24px';
-        inputField.style.maxHeight = '200px';
-        inputField.style.overflowY = 'auto';
         inputField.rows = 1;
 
         inputField.addEventListener('focus', () => {
@@ -962,7 +959,7 @@ export class Renderer {
         // Create a label to display match information
         const matchLabel = document.createElement('div');
         matchLabel.className = 'search-label';
-        matchLabel.textContent = 'No matches';
+        matchLabel.textContent = '';
         matchLabel.style.userSelect = 'none';
         matchLabel.style.pointerEvents = 'none';
 
@@ -1037,9 +1034,9 @@ export class Renderer {
         }
 
         // Initial height adjustment
-        inputField.style.height = 'auto';
-        const initialHeight = Math.min(inputField.scrollHeight, 200);
-        inputField.style.height = `${initialHeight}px`;
+        // inputField.style.height = 'auto';
+        // const initialHeight = Math.min(inputField.scrollHeight, 200);
+        // inputField.style.height = `${initialHeight}px`;
 
         // Add textarea and controls row to container
         this.searchContainer.appendChild(inputField);
@@ -1053,37 +1050,8 @@ export class Renderer {
 
     public updateSearchLabel(text: string) {
         if (!this.searchMatchLabel) return;
-        this.searchMatchLabel.textContent = text;
-    }
-
-    public renderSearchHighlights(search: Search){
-        let startLineDiv = this.getStartLine();
-        let endLineDiv = this.getEndLine();
-        if (!startLineDiv || !endLineDiv) return;
-
-        const pattern = search.getPattern();
-        const matches = search.getMatches();
-        const selectedIndex = search.getSelected();
-        
-        for (let i = 0; i < matches.length; i++) {
-            const match = matches[i];
-            if (match.line < startLineDiv.lineNumber 
-                || match.line >= endLineDiv.lineNumber) continue;
-
-            const lineDiv = this.getLine(match.line);
-            if (!lineDiv) continue;
-
-            this.renderHighlights(
-                lineDiv,
-                match.column,
-                match.column + pattern.length,
-                i === selectedIndex
-            );
-        }
-
-        if (search.getNeedsFocus()) {
-            this.focusSearchInput();
-            search.setNeedsFocus(false);
+        if (this.searchMatchLabel.textContent !== text) {
+            this.searchMatchLabel.textContent = text;
         }
     }
 }

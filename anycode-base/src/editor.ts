@@ -980,13 +980,12 @@ export class AnycodeEditor {
         }
     }
 
-    private onSearchInputChange(value: string) {
+    private onSearchInputChange(pattern: string) {
         // Clear everything
         this.renderer.removeAllHighlights(this.search);
-
-        const pattern = value.trim();
         
         if (!pattern) {
+            this.renderer.updateSearchLabel('');
             this.search.clear();
             this.search.setActive(false);
             this.search.setNeedsFocus(false);

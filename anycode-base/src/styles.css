@@ -117,8 +117,8 @@
   right: 0; 
   margin-right: 1.3rem;
   margin-top: 0.7rem;
-  min-width: 300px;
-  max-width: 80vw;
+  min-width: 200px;
+  max-width: 40vw;
   z-index: 10000;
   overflow: visible;
   transition: top 0.01s ease-out, left 0.1s ease-out; 
@@ -156,6 +156,10 @@
   white-space: pre-wrap;
   word-wrap: break-word;
   margin-bottom: 4px;
+  field-sizing: content;
+  width: 100%;
+  min-height: 24px;
+  max-height: 200px;
 }
 
 .search search-label {
@@ -214,6 +218,7 @@
 .search .search-button:active {
   background-color: rgba(255, 255, 255, 0.2) !important;
 }
+
 
 .highlight {
   background: rgba(179, 179, 179, 0.406);
