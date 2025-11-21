@@ -28,8 +28,8 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: 1px;
-    background: rgba(85, 85, 85, 0.21);
+    width: 1.5px;
+    background: linear-gradient(to bottom, transparent, #555, transparent);
 }
 
 .terminal-tab-vertical:hover {

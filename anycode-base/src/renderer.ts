@@ -32,7 +32,7 @@ export class Renderer {
     }
 
     public render(state: EditorState, search?: Search) {
-        // console.log("render");
+        console.log("render");
 
         const { code, offset, selection, runLines, errorLines, settings } = state;
 
@@ -92,7 +92,7 @@ export class Renderer {
     }
 
     public renderScroll(state: EditorState, search?: Search) {
-        // console.log("renderScroll");
+        console.log("renderScroll");
 
         const { code, offset, selection, settings } = state;
         const totalLines = code.linesLength();
@@ -219,7 +219,7 @@ export class Renderer {
     }
 
     public renderChanges(state: EditorState, search?: Search) {
-        // console.log("renderChanges");
+        console.log("renderChanges");
         // console.time('updateChanges');
     
         const { code, offset, selection, errorLines, settings } = state;

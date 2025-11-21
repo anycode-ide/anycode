@@ -36,9 +36,6 @@ export const DEFAULT_LEFT_PANEL_SIZE = 30;
 export const DEFAULT_RIGHT_PANEL_SIZE = 70;
 export const MIN_LEFT_PANEL_SIZE = 0;
 
-// Local storage keys
-export const DEBUG_MODE_KEY = 'anycode-debug-mode';
-
 // File extensions mapping
 export const LANGUAGE_EXTENSIONS: { [key: string]: string } = {
     'js': 'javascript',

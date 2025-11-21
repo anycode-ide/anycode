@@ -73,9 +73,7 @@ export class AnycodeEditor {
         language: string = 'javascript', 
         options: any = {}
     ) {
-        this.code = new Code(initialText, filename, language);
-        console.log("code constructor, options", options);
-        
+        this.code = new Code(initialText, filename, language);        
         // Set initial cursor position
         if (options.line !== undefined && options.column !== undefined) {
             this.offset = this.code.getOffset(options.line, options.column);
@@ -91,7 +89,6 @@ export class AnycodeEditor {
         addCssToDocument(css, 'anyeditor-theme');
         this.createDomElements();
         this.renderer = new Renderer(this.container, this.buttonsColumn, this.gutter, this.codeContent);
-        console.log("code constructor, this.offset", this.offset);
         this.isFocused = true;
     }
     
@@ -357,7 +354,7 @@ export class AnycodeEditor {
     }
 
     private handleBlur(e: FocusEvent) {
-        console.log('Editor lost focus');
+        // console.log('Editor lost focus');
         this.isMouseSelecting = false;
         this.isWordSelection = false;
         this.isFocused = false;
@@ -369,7 +366,7 @@ export class AnycodeEditor {
     }
 
     private handleFocus(e: FocusEvent) {
-        console.log('Editor focus');
+        // console.log('Editor focus');
         this.isFocused = true;
         this.search.setNeedsFocus(false);
     }

@@ -12,10 +12,6 @@
     position: relative;
 }
 
-.debug-panel {
-    border-bottom: 1px solid #444;
-    background-color: #1e1e1e;
-}
 
 .tab-bar {
     display: flex;
@@ -156,26 +152,6 @@
     background: #007acc;
     cursor: pointer;
     box-shadow: 0 0 8px rgba(0, 122, 204, 0.5);
-}
-
-.debug-toggle-btn {
-    background: none;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    
-}
-
-.debug-toggle-btn:hover {
-    color: #fff;
-}
-
-.debug-toggle-btn.active {
-    background-color: #444;
-    color: #fff;
 }
 
 .terminal-toggle-btn {
@@ -349,8 +325,8 @@
     right: 0;
     top: 0;
     bottom: 0;
-    width: 1px;
-    background: rgba(85, 85, 85, 0.21);
+    width: 1.5px;
+    background: linear-gradient(to bottom, transparent, #555, transparent);
 }
 
 .file-system-content {

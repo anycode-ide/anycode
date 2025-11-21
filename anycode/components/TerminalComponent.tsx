@@ -193,7 +193,7 @@ interface XTerminalProps {
           saveTerminalState();
         });
 
-        terminal.focus();
+        // terminal.focus();
 
         // Update previous values
         prevRowsRef.current = rows;

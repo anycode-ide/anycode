@@ -27,3 +27,11 @@ export function loadTerminals(): Terminal[] {
     }
     return [{ id: '0', name: 'terminal1', session: 'anycode', cols: 60, rows: 20 }];
 };
+
+export function loadTerminalSelected(): number {
+    const stored = localStorage.getItem('terminalSelected');
+    if (stored) {
+        return JSON.parse(stored);
+    }
+    return 0;
+}
