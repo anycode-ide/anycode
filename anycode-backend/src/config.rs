@@ -105,8 +105,8 @@ pub fn get_file_content_home(file_name: &str) -> anyhow::Result<String> {
 }
 
 
-pub fn get_file_content_assests(file_name: &str) -> anyhow::Result<String> {
-    // get the file content from assests 
+pub fn get_file_content_assets(file_name: &str) -> anyhow::Result<String> {
+    // get the file content from assets 
     let config = Assets::get(file_name);
     match config {
         Some(config) => {
@@ -119,10 +119,10 @@ pub fn get_file_content_assests(file_name: &str) -> anyhow::Result<String> {
 }
 
 pub fn get_file_content(file_name: &str) -> anyhow::Result<String> {
-    // get the file content, priority: env > home > assests
+    // get the file content, priority: env > home > assets
     get_file_content_env(file_name)
         .or_else(|_| get_file_content_home(file_name))
-        .or_else(|_| get_file_content_assests(file_name))
+        .or_else(|_| get_file_content_assets(file_name))
 }
 
 pub fn read_assets_config() -> anyhow::Result<String> {

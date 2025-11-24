@@ -92,7 +92,7 @@ export class Renderer {
     }
 
     public renderScroll(state: EditorState, search?: Search) {
-        console.log("renderScroll");
+        // console.log("renderScroll");
 
         const { code, offset, selection, settings } = state;
         const totalLines = code.linesLength();

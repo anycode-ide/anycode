@@ -48,7 +48,7 @@ mod terminal;
 use lsp_types::PublishDiagnosticsParams;
 use notify::{recommended_watcher, Event, RecursiveMode, Watcher};
 
-async fn on_connect(socket: SocketRef, state: State<AppState>) {
+async fn on_connect(socket: SocketRef, _state: State<AppState>) {
     info!("Socket.IO connected: {:?} {:?}", socket.ns(), socket.id);
 
     socket.on("file:open", handle_file_open);
@@ -75,7 +75,7 @@ async fn on_connect(socket: SocketRef, state: State<AppState>) {
     socket.on_disconnect(on_disconnect)
 }
 
-async fn on_disconnect(socket: SocketRef, state: State<AppState>) {
+async fn on_disconnect(socket: SocketRef, _state: State<AppState>) {
     info!("Socket.IO disconnected: {}", socket.id);
 }
 
@@ -241,7 +241,7 @@ async fn main() -> Result<()> {
 
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
-            tokio::signal::ctrl_c().await;
+            let _ = tokio::signal::ctrl_c().await;
         })
         .await?;
 

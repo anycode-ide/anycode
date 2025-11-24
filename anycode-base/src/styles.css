@@ -28,12 +28,12 @@
 
 .anyeditor .gutter {
   position: sticky;
-  left: 32px;
+  left: 31px;
   user-select: none;
   pointer-events: auto;
   background: inherit;
   min-width: 48px;
-  text-align: center;
+  /* text-align: center; */
   color: #888;
 }
 .anyeditor .gutter .ln {

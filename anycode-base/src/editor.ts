@@ -248,8 +248,9 @@ export class AnycodeEditor {
         this.codeContent.removeEventListener('blur', this.handleBlur);
     }
 
-    private handleScroll() {
+    private handleScroll(e: Event) {
         const scrollTop = this.container.scrollTop;
+        console.log(performance.now(), scrollTop);
         requestAnimationFrame(() => {
             if (scrollTop !== this.lastScrollTop) {
                 let state = this.getEditorState();

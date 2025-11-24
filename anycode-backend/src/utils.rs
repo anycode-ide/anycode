@@ -4,103 +4,20 @@ use std::path::{Path, PathBuf};
 pub const DEFAULT_IGNORE_DIRS: &[&str] = &[
     // Version control and IDEs
     ".git",
-
     // Python
-    "__pycache__", ".pytest_cache", ".mypy_cache", ".tox",
-    ".coverage", ".venv", "venv", "env",
-
-    // Java
-    ".gradle", ".m2", "classes",
-
-    // .NET
-    "packages",
-
-    // Ruby
-    ".bundle", "vendor",
-
-
-    // System files
-    ".DS_Store", "Thumbs.db", "desktop.ini",
-
-    // Cloud and DevOps
-    ".terraform", ".terragrunt-cache", ".pulumi",
-    ".vagrant", ".docker", ".kube", ".minikube",
-    ".helm", ".serverless",
-
-    // CI/CD
-    ".github", ".gitlab-ci", ".circleci", ".buildkite",
-    ".jenkins", ".azure-pipelines",
-
-    // Mobile development
-    ".expo", ".expo-shared", "ios/build", "android/build",
-    "android/.gradle", "ios/Pods", "ios/DerivedData",
-    ".flutter-plugins", ".flutter-plugins-dependencies",
-
-    // Game development
-    "Library", "Temp", "Logs", "MemoryCaptures",
-    "Builds", "UserSettings",
-
-    // Additional languages
-    ".stack-work", ".cabal-sandbox", // Haskell
-    "_build", ".merlin", // OCaml
-    ".eunit", ".rebar", ".rebar3", // Erlang
-    ".mix", "deps", // Elixir
-    ".dart_tool", // Dart
-    ".pio", ".platformio", // PlatformIO
-
-    // Scientific computing
-    ".ipynb_checkpoints", ".spyderproject", ".spyproject",
-    ".RData", ".Rhistory", ".Rproj.user",
-
-    // Web frameworks
-    ".svelte-kit", ".routify", ".sapper",
-    ".astro", ".solid", ".qwik",
-
-    // Legacy VCS
-    ".bzr", ".hg", ".svn", "CVS", "SCCS",
-
-    // Tool caches
-    ".eslintcache", ".stylelintcache",
+    "__pycache__", ".pytest_cache", 
 ];
 
 pub const DEFAULT_IGNORE_FILES: &[&str] = &[
     // System files
     ".DS_Store", "Thumbs.db", "desktop.ini",
-
-    // Environment and config
-    ".env", ".env.local", ".env.development", ".env.production",
-    ".envrc", ".direnv",
-
-    // Lock files
-    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
-    "Cargo.lock", "Pipfile.lock", "poetry.lock",
-    "composer.lock", "Gemfile.lock",
-
-    // Git files
-    ".gitignore", ".gitattributes", ".gitmodules",
-
-    // IDE and editor files
-    ".vimrc", ".editorconfig", ".clang-format",
-
-    // Build and dependency files
-    "Makefile", "CMakeLists.txt", "meson.build",
-    "requirements.txt", "setup.py", "pyproject.toml",
-    "package.json", "tsconfig.json", "webpack.config.js",
-    "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
-
-    // CI/CD files
-    ".travis.yml", ".gitlab-ci.yml", "appveyor.yml",
-    "azure-pipelines.yml", "buildspec.yml",
-
     // Certificate and key files
     "*.pem", "*.key", "*.crt", "*.p12",
-
     // Images and video
     "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff", "*.webp",
     "*.svg", "*.ico",
     "*.mp4", "*.mov", "*.avi", "*.mkv", "*.webm", "*.flv", "*.wmv",
     "*mp3", "*.wav", "*.ogg", "*.aac", "*.flac", "*.m4a", "*.opus", "*.wma",
-
     // Archives
     "*.zip", "*.tar", "*.gz", "*.bz2", "*.xz", "*.7z",
 ];

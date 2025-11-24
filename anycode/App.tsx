@@ -990,7 +990,7 @@ const App: React.FC = () => {
                     </Allotment.Pane>
                     <Allotment.Pane snap visible={terminalVisible}>
                         <div className="terminal-panel">
-                            <Allotment vertical={false} separator={false} defaultSizes={[15, 85]}>
+                            <Allotment vertical={false} separator={false} defaultSizes={[20, 80]}>
                                 <Allotment.Pane snap minSize={100}>
                                     <TerminalTabs
                                         terminals={terminals}
@@ -1058,7 +1058,7 @@ const App: React.FC = () => {
                    Terminals
                 </button>
 
-                <div className="tab-bar" style={{ flex: 1 }}>
+                <div className="" style={{ display: 'flex', height: '100%' }}>
                     {files.map(file => (
                         <div
                             key={file.id}
@@ -1072,7 +1072,7 @@ const App: React.FC = () => {
                     ))}                    
                 </div>
 
-                <span className="language-indicator">{activeFile?.language.toUpperCase()}</span>
+                {/* <span className="language-indicator">{activeFile?.language.toUpperCase()}</span> */}
             </div>
         </div>
     );

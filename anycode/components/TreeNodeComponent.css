@@ -11,10 +11,8 @@
 .tree-item-content {
     display: flex;
     align-items: center;
-    /* padding: 3px 6px; */
     cursor: pointer;
     border-radius: 12px;
-    /* transition: all 0.15s ease; */
     min-height: 20px;
     position: relative;
 }
@@ -27,10 +25,6 @@
     background-color: #3c3c3c;
     color: #fff;
 }
-
-
-
-
 
 .tree-toggle {
     width: 16px;
@@ -65,10 +59,6 @@
     position: relative;
 }
 
-
-
-
-
 .tree-name {
     flex: 1;
     overflow: hidden;
@@ -78,17 +68,16 @@
     user-select: none;
 }
 
-/* Цвета для папок и файлов */
 .tree-item-content .tree-name {
     color: #e0e0e0;
 }
 
 .tree-item-content.directory .tree-name {
-    color: #888888; /* Серый цвет для папок */
+    color: #888888;
 }
 
 .tree-item-content.file .tree-name {
-    color: #e0e0e0; /* Обычный цвет для файлов */
+    color: #e0e0e0;
 }
 
 .tree-size {
@@ -106,19 +95,8 @@
 }
 
 .tree-children {
-    /* margin-left: 1px; */
     position: relative;
 }
-
-/* .tree-children::before {
-    content: '';
-    position: absolute;
-    left: 10px;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background-color: #555;
-} */
 
 .tree-children .tree-item:last-child .tree-indent::before {
     bottom: 50%;
