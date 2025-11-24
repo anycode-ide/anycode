@@ -7,7 +7,7 @@ import { loadTerminals, loadTerminalSelected, loadTerminalVisible, loadLeftPanel
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
 import { TreeNodeComponent, TreeNode, FileState, TerminalComponent, TerminalTabs } from './components';
-import { DEFAULT_FILE, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
+import { DEFAULT_FILE, DEFAULT_FILE_CONTENT, BACKEND_URL, MIN_LEFT_PANEL_SIZE, LANGUAGE_EXTENSIONS } from './constants';
 import './App.css';
 import { 
     Completion, CompletionRequest, Diagnostic, DiagnosticResponse, 
@@ -105,13 +105,17 @@ const App: React.FC = () => {
                 for (const file of files) {
                     if (!editorStates.has(file.id)) {
                         // create editor if it doesn't exist
+                        const content = savedFileContentsRef.current.get(file.id);
+                        if (!content) continue;
+
                         const pendingPosition = pendingPositions.current.get(file.id);
                         const pendingDiagnostics = diagnosticsRef.current.get(file.id);
                         const errors = pendingDiagnostics ? pendingDiagnostics
                             .map(d => ({ line: d.range.start.line, message: d.message })) : undefined;
-                        const editor = await createEditor(file.content, file.language, file.id, pendingPosition, errors);
+
+                        const editor = await createEditor(content, file.language, file.id, pendingPosition, errors);
                         newEditorStates.set(file.id, editor);
-                        savedFileContentsRef.current.set(file.id, file.content);
+                        savedFileContentsRef.current.set(file.id, content);
                         editorRefs.current.set(file.id, editor);
                         
                         if (pendingPosition) pendingPositions.current.delete(file.id);
@@ -196,10 +200,10 @@ const App: React.FC = () => {
         if (!file) return;
 
         const editor = editorRefs.current.get(file.id);
-        if (!editor) { return; }
+        if (!editor) return;
 
         let oldcontent = savedFileContentsRef.current.get(file.id);
-        if (!oldcontent) { return; }
+        if (!oldcontent) return;
 
         let newContentLength = editor.getTextLength();
 
@@ -305,19 +309,11 @@ const App: React.FC = () => {
     const handleSaveFileResponse = (fileId: string, content: string, response: any) => {
         if (response.success) {
             console.log('File saved successfully:', fileId);
-
             savedFileContentsRef.current.set(fileId, content);
-            // update local state after successful save
-            setFiles(prev => prev.map(file => 
-                file.id === fileId 
-                    ? { ...file, content, isDirty: false }
-                    : file
-            ));
             dirtyFlagsRef.current.set(fileId, false);
             setDirtyFlags(prev => new Map(prev).set(fileId, false));
         } else {
             console.error('Failed to save file:', response.error);
-            // Handle error - could show a notification or alert
         }
     };
 
@@ -649,9 +645,8 @@ const App: React.FC = () => {
     const handleOpenFileResponse = (path: string, content: string) => {
         const fileName = path.split('/').pop() || 'untitled';
         const language = getLanguageFromFileName(fileName);
-        const newFile: FileState = {
-            id: path, name: fileName, language, content: content
-        };
+        savedFileContentsRef.current.set(path, content);
+        const newFile: FileState = { id: path, name: fileName, language };
         setFiles(prev => [...prev, newFile]);
         setActiveFileId(newFile.id);
     };
@@ -946,6 +941,7 @@ const App: React.FC = () => {
             setActiveFileId(DEFAULT_FILE.id);
             const currentPos = { file: DEFAULT_FILE.id, cursor: { line: 0, column: 0 } };
             cursorHistory.current.undoStack.push(currentPos);
+            savedFileContentsRef.current.set(DEFAULT_FILE.id, DEFAULT_FILE_CONTENT);
         }
         
         return () => {

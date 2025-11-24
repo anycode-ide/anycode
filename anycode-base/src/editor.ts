@@ -254,7 +254,6 @@ export class AnycodeEditor {
 
     private handleScroll(e: Event) {
         const scrollTop = this.container.scrollTop;
-        console.log(performance.now(), scrollTop);
         requestAnimationFrame(() => {
             if (scrollTop !== this.lastScrollTop) {
                 let state = this.getEditorState();

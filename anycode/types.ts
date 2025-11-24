@@ -15,7 +15,6 @@ export interface FileState {
     id: string;
     name: string;
     language: string;
-    content: string;
 }
 
 export interface FileSystemItem {

@@ -4,7 +4,10 @@ export const DEFAULT_FILE: FileState = {
     id: 'welcome.js',
     name: 'welcome.js',
     language: 'javascript',
-    content: `// Welcome to Anycode Editor!
+};
+
+export const DEFAULT_FILE_CONTENT = 
+`// Welcome to Anycode Editor!
 
 // This is a default file created for you. You can:
 // - Open files from the file tree on the left  
@@ -24,8 +27,7 @@ function hello() {
 }
 
 // Try editing this file!
-`
-};
+`;
 
 // Backend connection settings
 const port = "3000"
