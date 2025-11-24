@@ -137,6 +137,10 @@ export class AnycodeEditor {
         return this.code.getContent();
     }
 
+    public getTextLength(): number {
+        return this.code.getContentLength();
+    }
+
     public async init() {
         await this.code.init();
         this.setupEventListeners();

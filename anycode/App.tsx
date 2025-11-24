@@ -19,7 +19,7 @@ const App: React.FC = () => {
     
     const [files, setFiles] = useState<FileState[]>([]);
     const filesRef = useRef<FileState[]>([]);
-    const fileContentsRef = useRef<Map<string, string>>(new Map());
+    const savedFileContentsRef = useRef<Map<string, string>>(new Map());
     const dirtyFlagsRef = useRef<Map<string, boolean>>(new Map());
     const [dirtyFlags, setDirtyFlags] = useState<Map<string, boolean>>(new Map());
     const [activeFileId, setActiveFileId] = useState<string | null>(null);
@@ -29,7 +29,6 @@ const App: React.FC = () => {
     const pendingPositions = useRef<Map<string, { line: number; column: number }>>(new Map());
     const cursorHistory = useRef<CursorHistory>({ undoStack: [], redoStack: [] });
     const activeFile = files.find(f => f.id === activeFileId);
-    const lengthSpanRef = useRef<HTMLSpanElement>(null);
     
     const [fileTree, setFileTree] = useState<TreeNode[]>([]);
     const [currentPath, setCurrentPath] = useState<string>('.');
@@ -112,7 +111,7 @@ const App: React.FC = () => {
                             .map(d => ({ line: d.range.start.line, message: d.message })) : undefined;
                         const editor = await createEditor(file.content, file.language, file.id, pendingPosition, errors);
                         newEditorStates.set(file.id, editor);
-                        fileContentsRef.current.set(file.id, file.content);
+                        savedFileContentsRef.current.set(file.id, file.content);
                         editorRefs.current.set(file.id, editor);
                         
                         if (pendingPosition) pendingPositions.current.delete(file.id);
@@ -196,26 +195,27 @@ const App: React.FC = () => {
         const file = files.find(f => f.name === filename);
         if (!file) return;
 
-        let newContent = fileContentsRef.current.get(file.id) || file.content;
-        for (const edit of change.edits) {
-            newContent = applyEdit(newContent, edit);
+        const editor = editorRefs.current.get(file.id);
+        if (!editor) { return; }
+
+        let oldcontent = savedFileContentsRef.current.get(file.id);
+        if (!oldcontent) { return; }
+
+        let newContentLength = editor.getTextLength();
+
+        let isDirty = false;
+        if (newContentLength !== oldcontent.length) {
+            isDirty = true;
+        } else {
+            let newContent = editor.getText();
+            isDirty = newContent !== oldcontent;
         }
-
-        const isDirty = newContent !== file.content;
-
-        fileContentsRef.current.set(file.id, newContent);
 
         const currentDirtyFlag = dirtyFlagsRef.current.get(file.id);
         if (currentDirtyFlag !== isDirty) {
             console.log('setDirtyFlags', file.id, isDirty);
             dirtyFlagsRef.current.set(file.id, isDirty);
             setDirtyFlags(prev => new Map(prev).set(file.id, isDirty));
-        }
-
-        if (activeFileId === file.id && lengthSpanRef.current) {
-            requestAnimationFrame(() => {
-                lengthSpanRef.current!.textContent = newContent.length.toString();
-            });
         }
     };
 
@@ -257,7 +257,7 @@ const App: React.FC = () => {
         });
         editorRefs.current.delete(fileId);
         
-        fileContentsRef.current.delete(fileId);
+        savedFileContentsRef.current.delete(fileId);
         dirtyFlagsRef.current.delete(fileId);
         setDirtyFlags(prev => {
             const newFlags = new Map(prev);
@@ -284,26 +284,37 @@ const App: React.FC = () => {
     };
 
     const saveFile = (fileId: string) => {
-        const currentContent = fileContentsRef.current.get(fileId);
-        if (currentContent !== undefined) {
-            // send file to backend with ack
-            if (wsRef.current && isConnected) {
-                wsRef.current.emit('file:save', { path: fileId }, handleSaveFileResponse);
-            }
+        const editor = editorRefs.current.get(fileId);
+        if (!editor) return;
+
+        const content = editor.getText();
+
+        const oldContent = savedFileContentsRef.current.get(fileId);
+        let isChanged = oldContent !== content;
+
+        if (!isChanged) { return; }
+
+        // send file to backend with ack
+        if (wsRef.current && isConnected) {
+            wsRef.current.emit('file:save', { path: fileId }, (response: any) => { 
+                handleSaveFileResponse(fileId, content, response); 
+            });
         }
     };
 
-    const handleSaveFileResponse = (response: any) => {
+    const handleSaveFileResponse = (fileId: string, content: string, response: any) => {
         if (response.success) {
-            console.log('File saved successfully:', response);
+            console.log('File saved successfully:', fileId);
+
+            savedFileContentsRef.current.set(fileId, content);
             // update local state after successful save
             setFiles(prev => prev.map(file => 
-                file.id === response.path 
-                    ? { ...file, content: fileContentsRef.current.get(response.path) || file.content, isDirty: false }
+                file.id === fileId 
+                    ? { ...file, content, isDirty: false }
                     : file
             ));
-            dirtyFlagsRef.current.set(response.path, false);
-            setDirtyFlags(prev => new Map(prev).set(response.path, false));
+            dirtyFlagsRef.current.set(fileId, false);
+            setDirtyFlags(prev => new Map(prev).set(fileId, false));
         } else {
             console.error('Failed to save file:', response.error);
             // Handle error - could show a notification or alert

@@ -262,7 +262,11 @@ export class Code {
     };
 
     public getContent(): string {
-        return this.buffer.getLinesContent().join("\n")
+        return this.buffer.getLinesContent().join("\n");
+    }
+
+    public getContentLength(): number {
+        return this.buffer.getLength();
     }
 
     public getIntervalContent(
@@ -350,7 +354,8 @@ export class Code {
         };
 
         if (addHistory) {
-            this.recordChange({ edits: [edit] });
+            let change: Change = { edits: [edit] };
+            this.history.push(change);
         }
 
         if (this.changeActive) {
@@ -387,7 +392,8 @@ export class Code {
         };
 
         if (addHistory) {
-            this.recordChange({ edits: [edit] });
+            let change: Change = { edits: [edit] };
+            this.history.push(change);
         }
 
         if (this.changeActive) {
@@ -443,55 +449,6 @@ export class Code {
         this.tree!.delete();
         this.tree = newTree || undefined;
     }
-
-    public applyEdit(edit: Edit): void {
-        const { operation, start, text } = edit;
-        console.log('applyEdit', {edit})
-
-        if (operation === Operation.Insert) {
-            this.buffer.insert(start, text);
-            if (this.tree) this.treeSitterInsert(text, start);
-        } else if (operation === Operation.Remove) {
-            this.buffer.delete(start, text.length);
-            if (this.tree) this.treeSitterRemove(start + text.length, text.length);
-        }
-
-        this.linesCache.clear();
-
-    }
-
-    public applyChange(change: Change, addHistory: boolean = false): void {
-        const applied: Edit[] = [];
-
-        try {
-            for (const edit of change.edits) {
-                const inverseEdit: Edit = {
-                    operation: edit.operation === Operation.Insert ?
-                        Operation.Remove : Operation.Insert,
-                    start: edit.start,
-                    text: edit.text
-                };
-                this.applyEdit(edit);
-                applied.push(inverseEdit);
-            }
-
-            if (addHistory) {
-                this.recordChange(change);
-            }
-
-            if (this.onChange) this.onChange(change);
-
-            this.linesCache.clear();
-        } catch (err) {
-            console.log('needs rollback', { applied });
-            // Rollback in reverse order
-            for (let i = applied.length - 1; i >= 0; i--) {
-                const edit = applied[i];
-                this.applyEdit(edit);
-            }
-            throw err;
-        }
-    }
     
     tx() {
         this.changeActive = true;
@@ -514,7 +471,7 @@ export class Code {
                 stateAfter:  this.changeStateAfter,
             } as Change;
 
-            this.recordChange(change);
+            this.history.push(change);
 
             if (this.onChange) this.onChange(change);
 
@@ -525,10 +482,6 @@ export class Code {
         } else {
             console.error('No active changes to commit');
         }
-    }
-
-    private recordChange(change: Change) {
-        this.history.push(change);
     }
 
     public undo(): Change | undefined {
