@@ -487,15 +487,31 @@ export class Code {
     public undo(): Change | undefined {
         const change = this.history.undo();
         if (!change) return undefined;
+
         const edits = [...change.edits].reverse();
+
+        let undoChange: Change = { edits: [] };
 
         for (const edit of edits) {
             if (edit.operation === Operation.Insert) {
+                undoChange.edits.push({
+                    operation: Operation.Remove,
+                    start: edit.start,
+                    text: edit.text
+                });
                 this.remove(edit.start, edit.text.length);
             } else if (edit.operation === Operation.Remove) {
+                undoChange.edits.push({
+                    operation: Operation.Insert,
+                    start: edit.start,
+                    text: edit.text
+                });
                 this.insert(edit.text, edit.start);
             }
         }
+
+        if (this.onChange) this.onChange(undoChange);
+
         return change;
     }
 
@@ -504,13 +520,28 @@ export class Code {
         if (!change) return null;
         const edits = change.edits;
 
+        let redoChange: Change = { edits: [] };
+
         for (const edit of edits) {
             if (edit.operation === Operation.Insert) {
+                redoChange.edits.push({
+                    operation: Operation.Insert,
+                    start: edit.start,
+                    text: edit.text
+                });
                 this.insert(edit.text, edit.start);
             } else if (edit.operation === Operation.Remove) {
+                redoChange.edits.push({
+                    operation: Operation.Remove,
+                    start: edit.start,
+                    text: edit.text
+                });
                 this.remove(edit.start, edit.text.length);
             }
         }
+
+        if (this.onChange) this.onChange(redoChange);
+
         return change;
     }
 

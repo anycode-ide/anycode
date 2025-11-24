@@ -31,7 +31,6 @@ const App: React.FC = () => {
     const activeFile = files.find(f => f.id === activeFileId);
     
     const [fileTree, setFileTree] = useState<TreeNode[]>([]);
-    const [currentPath, setCurrentPath] = useState<string>('.');
     const [isConnected, setIsConnected] = useState<boolean>(true);
     const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -605,18 +604,18 @@ const App: React.FC = () => {
                 return updateNode(prev);
             });
         }
-        setCurrentPath(response.relative_path);
     };
 
     const openFile = (path: string) => {
-        // console.log('Opening file:', path);
-        // console.log('Current files:', files.map(f => ({ id: f.id, name: f.name })));
+        console.log('Opening file:', path);
         
         const existingFile = files.find(file => file.id === path);
         
         if (existingFile) {
-            // console.log('File already open, switching to:', existingFile.name);
-            setActiveFileId(existingFile.id);
+            console.log('File already open, switching to:', existingFile.name);
+            if (existingFile.id !== activeFileId) {
+                setActiveFileId(existingFile.id);
+            }
             return;
         }
                 
@@ -633,12 +632,6 @@ const App: React.FC = () => {
 
     const openTreeFile = (file: string) => {
         console.log('Opening file from tree:', file);
-        
-        // const cursorPos = { file, cursor: { line: 0, column: 0 } };
-        // console.log('Saving position (0,0) for tree file:', cursorPos);
-        // cursorHistory.current.undoStack.push(cursorPos);
-        // cursorHistory.current.redoStack = [];
-        
         openFile(file);
     };
 
